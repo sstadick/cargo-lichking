@@ -148,12 +148,6 @@ impl SelectedTarget {
         ]
     }
 
-    fn help() -> &'static str {
-        "\
-            TODO
-        "
-    }
-
     fn from_matches(matches: &ArgMatches) -> SelectedTarget {
         if matches.is_present("all-targets") {
             SelectedTarget::All
@@ -300,7 +294,6 @@ impl Options {
                 .args(&SelectedPackage::args())
                 .args(&SelectedTarget::args())
                 .after_help(SelectedPackage::help())
-                .after_help(SelectedTarget::help()),
 
 
             SubCommand::with_name("list")
@@ -309,7 +302,6 @@ impl Options {
                 .args(&SelectedPackage::args())
                 .args(&SelectedTarget::args())
                 .after_help(SelectedPackage::help())
-                .after_help(SelectedTarget::help()),
 
             SubCommand::with_name("bundle")
                 .about("Bundle all dependencies licenses ready for distribution")
@@ -317,7 +309,6 @@ impl Options {
                 .args(&SelectedPackage::args())
                 .args(&SelectedTarget::args())
                 .after_help(SelectedPackage::help())
-                .after_help(SelectedTarget::help()),
 
             SubCommand::with_name("thirdparty")
                 .about("List dependencies of cargo-lichking")
