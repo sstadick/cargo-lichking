@@ -1,5 +1,6 @@
 #![allow(unknown_lints)] // for clippy
 
+#[macro_use] extern crate itertools;
 #[macro_use] extern crate clap;
 extern crate cargo;
 #[macro_use] extern crate failure;
