@@ -1,18 +1,26 @@
 use cargo::core::Package;
-use cargo::{ Config, CargoResult };
+use cargo::{CargoResult, Config};
 
-use licensed::Licensed;
+use crate::licensed::Licensed;
 
 pub fn run(root: &Package, packages: Vec<Package>, config: &Config) -> CargoResult<()> {
     let mut fail = 0;
     let license = root.license();
 
     for package in packages {
-        if &package == root { continue }
+        if &package == root {
+            continue;
+        }
         let can_include = license.can_include(&package.license());
         if let Some(can_include) = can_include {
             if !can_include {
-                config.shell().error(format!("{} cannot include package {}, license {} is incompatible with {}", root.name(), package.name(), package.license(), license))?;
+                config.shell().error(format!(
+                    "{} cannot include package {}, license {} is incompatible with {}",
+                    root.name(),
+                    package.name(),
+                    package.license(),
+                    license
+                ))?;
                 fail += 1;
             }
         } else {

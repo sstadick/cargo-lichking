@@ -45,7 +45,6 @@ impl Default for License {
 
 macro_rules! compatibility {
   ($s:expr, $o:expr, { $($a:pat => [$($b:pat),+])+ }) => {
-    #[allow(single_match)]
     match $s {
       $(
         $a => match $o {
@@ -61,12 +60,22 @@ impl License {
     pub fn can_include(&self, other: &License) -> Option<bool> {
         use self::License::*;
 
-        if let Unspecified = *other { return Some(false); }
+        if let Unspecified = *other {
+            return Some(false);
+        }
 
-        if let Custom(_) = *self { return None; }
-        if let Custom(_) = *other { return None; }
-        if let File(_) = *self { return None; }
-        if let File(_) = *other { return None; }
+        if let Custom(_) = *self {
+            return None;
+        }
+        if let Custom(_) = *other {
+            return None;
+        }
+        if let File(_) = *self {
+            return None;
+        }
+        if let File(_) = *other {
+            return None;
+        }
 
         if let Multiple(ref licenses) = *self {
             for license in licenses {
@@ -95,8 +104,12 @@ impl License {
             return if seen_none { None } else { Some(false) };
         }
 
-        if let LGPL_2_0 = *self { return None; /* TODO: unknown */ }
-        if let LGPL_2_0 = *other { return None; /* TODO: unknown */ }
+        if let LGPL_2_0 = *self {
+            return None; /* TODO: unknown */
+        }
+        if let LGPL_2_0 = *other {
+            return None; /* TODO: unknown */
+        }
 
         compatibility!(*self, *other, {
             Unspecified         => [Unlicense, MIT, X11, BSD_2_Clause, BSD_3_Clause]
@@ -135,12 +148,12 @@ impl License {
 
     pub fn template(&self) -> Option<&'static str> {
         Some(match *self {
-            License::Unlicense     => include_str!("licenses/Unlicense"),
-            License::MIT           => include_str!("licenses/MIT"),
-            License::Apache_2_0    => include_str!("licenses/Apache-2.0"),
-            License::BSD_3_Clause    => include_str!("licenses/BSD-3-Clause"),
-            License::Multiple(_)   => { panic!("TODO: Refactor multiple handling") }
-            _                      => { return None }
+            License::Unlicense => include_str!("licenses/Unlicense"),
+            License::MIT => include_str!("licenses/MIT"),
+            License::Apache_2_0 => include_str!("licenses/Apache-2.0"),
+            License::BSD_3_Clause => include_str!("licenses/BSD-3-Clause"),
+            License::Multiple(_) => panic!("TODO: Refactor multiple handling"),
+            _ => return None,
         })
     }
 }
@@ -149,36 +162,37 @@ impl FromStr for License {
     type Err = Void;
     fn from_str(s: &str) -> Result<License, Void> {
         Ok(match s.trim() {
-            "Unlicense"                       => License::Unlicense,
-            "0BSD"                            => License::BSD_0_Clause,
-            "CC0-1.0"                         => License::CC0_1_0,
-            "MIT"                             => License::MIT,
-            "X11"                             => License::X11,
-            "BSD-2-Clause"                    => License::BSD_2_Clause,
-            "BSD-3-Clause"                    => License::BSD_3_Clause,
-            "Apache-2.0"                      => License::Apache_2_0,
-            "LGPL-2.0-only"     | "LGPL-2.0"  => License::LGPL_2_0,
-            "LGPL-2.1-only"     | "LGPL-2.1"  => License::LGPL_2_1,
+            "Unlicense" => License::Unlicense,
+            "0BSD" => License::BSD_0_Clause,
+            "CC0-1.0" => License::CC0_1_0,
+            "MIT" => License::MIT,
+            "X11" => License::X11,
+            "BSD-2-Clause" => License::BSD_2_Clause,
+            "BSD-3-Clause" => License::BSD_3_Clause,
+            "Apache-2.0" => License::Apache_2_0,
+            "LGPL-2.0-only" | "LGPL-2.0" => License::LGPL_2_0,
+            "LGPL-2.1-only" | "LGPL-2.1" => License::LGPL_2_1,
             "LGPL-2.1-or-later" | "LGPL-2.1+" => License::LGPL_2_1Plus,
-            "LGPL-3.0-only"     | "LGPL-3.0"  => License::LGPL_3_0,
+            "LGPL-3.0-only" | "LGPL-3.0" => License::LGPL_3_0,
             "LGPL-3.0-or-later" | "LGPL-3.0+" => License::LGPL_3_0Plus,
-            "MPL-1.1"                         => License::MPL_1_1,
-            "MPL-2.0"                         => License::MPL_2_0,
-            "GPL-2.0-only"      | "GPL-2.0"   => License::GPL_2_0,
-            "GPL-2.0-or-later"  | "GPL-2.0+"  => License::GPL_2_0Plus,
-            "GPL-3.0-only"      | "GPL-3.0"   => License::GPL_3_0,
-            "GPL-3.0-or-later"  | "GPL-3.0+"  => License::GPL_3_0Plus,
-            "AGPL-3.0-only"     | "AGPL-3.0"  => License::AGPL_3_0,
+            "MPL-1.1" => License::MPL_1_1,
+            "MPL-2.0" => License::MPL_2_0,
+            "GPL-2.0-only" | "GPL-2.0" => License::GPL_2_0,
+            "GPL-2.0-or-later" | "GPL-2.0+" => License::GPL_2_0Plus,
+            "GPL-3.0-only" | "GPL-3.0" => License::GPL_3_0,
+            "GPL-3.0-or-later" | "GPL-3.0+" => License::GPL_3_0Plus,
+            "AGPL-3.0-only" | "AGPL-3.0" => License::AGPL_3_0,
             "AGPL-3.0-or-later" | "AGPL-3.0+" => License::AGPL_3_0Plus,
             s if s.contains('/') || s.contains(" OR ") => {
-                let mut licenses = s.split('/')
+                let mut licenses = s
+                    .split('/')
                     .flat_map(|s| s.split(" OR "))
                     .map(str::parse)
                     .map(Result::unwrap)
                     .collect::<Vec<License>>();
                 licenses.sort();
                 License::Multiple(licenses)
-            },
+            }
             s => License::Custom(s.to_owned()),
         })
     }
@@ -187,37 +201,39 @@ impl FromStr for License {
 impl fmt::Display for License {
     fn fmt(&self, w: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            License::Unlicense     => write!(w, "Unlicense"),
-            License::BSD_0_Clause  => write!(w, "0BSD"),
-            License::CC0_1_0       => write!(w, "CC0-1.0"),
-            License::MIT           => write!(w, "MIT"),
-            License::X11           => write!(w, "X11"),
-            License::BSD_2_Clause  => write!(w, "BSD-2-Clause"),
-            License::BSD_3_Clause  => write!(w, "BSD-3-Clause"),
-            License::Apache_2_0    => write!(w, "Apache-2.0"),
-            License::LGPL_2_0      => write!(w, "LGPL-2.0-only"),
-            License::LGPL_2_1      => write!(w, "LGPL-2.1-only"),
-            License::LGPL_2_1Plus  => write!(w, "LGPL-2.1-or-later"),
-            License::LGPL_3_0      => write!(w, "LGPL-3.0-only"),
-            License::LGPL_3_0Plus  => write!(w, "LGPL-3.0-or-later"),
-            License::MPL_1_1       => write!(w, "MPL-1.1"),
-            License::MPL_2_0       => write!(w, "MPL-2.0"),
-            License::GPL_2_0       => write!(w, "GPL-2.0-only"),
-            License::GPL_2_0Plus   => write!(w, "GPL-2.0-or-later"),
-            License::GPL_3_0       => write!(w, "GPL-3.0-only"),
-            License::GPL_3_0Plus   => write!(w, "GPL-3.0-or-later"),
-            License::AGPL_3_0      => write!(w, "AGPL-3.0-only"),
-            License::AGPL_3_0Plus  => write!(w, "AGPL-3.0-or-later"),
+            License::Unlicense => write!(w, "Unlicense"),
+            License::BSD_0_Clause => write!(w, "0BSD"),
+            License::CC0_1_0 => write!(w, "CC0-1.0"),
+            License::MIT => write!(w, "MIT"),
+            License::X11 => write!(w, "X11"),
+            License::BSD_2_Clause => write!(w, "BSD-2-Clause"),
+            License::BSD_3_Clause => write!(w, "BSD-3-Clause"),
+            License::Apache_2_0 => write!(w, "Apache-2.0"),
+            License::LGPL_2_0 => write!(w, "LGPL-2.0-only"),
+            License::LGPL_2_1 => write!(w, "LGPL-2.1-only"),
+            License::LGPL_2_1Plus => write!(w, "LGPL-2.1-or-later"),
+            License::LGPL_3_0 => write!(w, "LGPL-3.0-only"),
+            License::LGPL_3_0Plus => write!(w, "LGPL-3.0-or-later"),
+            License::MPL_1_1 => write!(w, "MPL-1.1"),
+            License::MPL_2_0 => write!(w, "MPL-2.0"),
+            License::GPL_2_0 => write!(w, "GPL-2.0-only"),
+            License::GPL_2_0Plus => write!(w, "GPL-2.0-or-later"),
+            License::GPL_3_0 => write!(w, "GPL-3.0-only"),
+            License::GPL_3_0Plus => write!(w, "GPL-3.0-or-later"),
+            License::AGPL_3_0 => write!(w, "AGPL-3.0-only"),
+            License::AGPL_3_0Plus => write!(w, "AGPL-3.0-or-later"),
             License::Custom(ref s) => write!(w, "{}", s),
-            License::File(ref f)   => write!(w, "License specified in file ({})", f.to_string_lossy()),
-            License::Multiple(ref ls)   => {
+            License::File(ref f) => {
+                write!(w, "License specified in file ({})", f.to_string_lossy())
+            }
+            License::Multiple(ref ls) => {
                 write!(w, "{}", ls[0])?;
                 for l in ls.iter().skip(1) {
                     write!(w, " / {}", l)?;
                 }
                 Ok(())
-            },
-            License::Unspecified          => write!(w, "No license specified"),
+            }
+            License::Unspecified => write!(w, "No license specified"),
         }
     }
 }
