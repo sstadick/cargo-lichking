@@ -29,7 +29,7 @@ pub fn run(root: &Package, packages: Vec<Package>, config: &Config) -> CargoResu
     }
 
     if fail > 0 {
-        bail!("Incompatible license")
+        failure::bail!("Incompatible license")
     } else {
         Ok(())
     }

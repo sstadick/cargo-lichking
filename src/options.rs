@@ -210,9 +210,9 @@ impl Options {
     // error output.
     pub fn subapp(subcommand_required: bool) -> App<'static, 'static> {
         let mut app = SubCommand::with_name("lichking")
-            .author(crate_authors!())
-            .version(crate_version!())
-            .about(crate_description!())
+            .author(clap::crate_authors!())
+            .version(clap::crate_version!())
+            .about(clap::crate_description!())
             .args(&Options::args())
             .subcommands(Options::subcommands());
         if subcommand_required {

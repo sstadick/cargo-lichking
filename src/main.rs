@@ -1,8 +1,3 @@
-#[macro_use]
-extern crate clap;
-#[macro_use]
-extern crate failure;
-
 mod bundle;
 mod check;
 mod discovery;

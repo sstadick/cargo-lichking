@@ -109,7 +109,7 @@ pub fn run(
     }
 
     if context.missing_license || context.low_quality_license {
-        bail!("Generating bundle finished with error(s)")
+        failure::bail!("Generating bundle finished with error(s)")
     } else {
         Ok(())
     }
