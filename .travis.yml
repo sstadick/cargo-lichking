@@ -10,20 +10,12 @@ script:
 - cargo test --all --release
 
 matrix:
-  allow_failures:
-  - rust: nightly
   include:
   - name: cargo test
     os: osx
 
   - name: cargo test
     os: windows
-
-  - name: cargo test -Z minimal-versions
-    rust: nightly
-    script:
-    - cargo update -Z minimal-versions
-    - cargo test --all
 
   - name: cargo clippy
     install:
