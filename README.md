@@ -1,4 +1,4 @@
-# cargo-lichking [![travis-badge][]][travis] [![downloads-badge][] ![release-badge][]][crate] [![license-badge][]](#license) [![rust-version-badge][]][rust-version]
+# cargo-lichking [![travis-badge][]][travis] ![crate-badge][]][crate] [![license-badge][]][license] [![rust-version-badge][]][rust-version]
 
 Automated **li**cense **ch**ec**king** for rust. `cargo lichking` is a [Cargo][]
 subcommand that checks licensing information for dependencies.
@@ -10,35 +10,26 @@ on package metadata containing correct licensing information, this is not
 guaranteed so for real license checking it's necessary to verify all
 dependencies manually.
 
-[travis-badge]: https://img.shields.io/travis/Nemo157/cargo-lichking/master.svg?style=flat-square
-[downloads-badge]: https://img.shields.io/crates/d/cargo-lichking.svg?style=flat-square
-[release-badge]: https://img.shields.io/crates/v/cargo-lichking.svg?style=flat-square
-[license-badge]: https://img.shields.io/crates/l/cargo-lichking.svg?style=flat-square
-[rust-version-badge]: https://img.shields.io/badge/rust-1.20+-blue.svg?style=flat-square
-[travis]: https://travis-ci.org/Nemo157/cargo-lichking
-[crate]: https://crates.io/crates/cargo-lichking
-[Cargo]: https://github.com/rust-lang/cargo
-[rust-version]: .travis.yml#L5
+## Rust Version Policy
 
-### Installation
+This crate only supports the current stable version of Rust, patch releases may
+use new features at any time.
 
-To install simply run `cargo install cargo-lichking`; unless you're using a homebrew installed
-copy of openssl, then *"simply"* run:
+## Installation
 
-```shall
-OPENSSL_ROOT_DIR=`brew --prefix openssl` \
-OPENSSL_LIB_DIR=`brew --prefix openssl`/lib \
-OPENSSL_INCLUDE_DIR=`brew --prefix openssl`/include \
-cargo install cargo-lichking
-```
+To install simply run `cargo install cargo-lichking`.
 
-### Usage
+## Usage
 
 To get a list of all your (transitive) dependencies licenses run `cargo lichking
 list`. To check license compatibility based off this [License Slide][] by David
 A. Wheeler run `cargo lichking check`.
 
-[License Slide]: http://www.dwheeler.com/essays/floss-license-slide.html
+## Developing
+
+When running via `cargo run` you'll need to provide an initial `lichking`
+argument to simulate running as a cargo subcommand, e.g. `cargo run -- lichking
+check`.
 
 ## License
 
@@ -55,18 +46,14 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you shall be dual licensed as above, without any
 additional terms or conditions.
 
-## Developing
+[travis-badge]: https://img.shields.io/travis/Nemo157/cargo-lichking/master.svg?style=flat-square
+[travis]: https://travis-ci.org/Nemo157/cargo-lichking
+[crate-badge]: https://img.shields.io/crates/v/cargo-lichking.svg?style=flat-square
+[crate]: https://crates.io/crates/cargo-lichking
+[license-badge]: https://img.shields.io/crates/l/cargo-lichking.svg?style=flat-square
+[license]: #license
+[rust-version-badge]: https://img.shields.io/badge/rust-latest%20stable-blue.svg?style=flat-square
+[rust-version]: #rust-version-policy
 
-If building on OS X with a `homebrew` installed copy of OpenSSL you'll need to
-specify where this is to enable building `libssh2-sys`.  Use something like:
-
-```sh
-OPENSSL_ROOT_DIR=`brew --prefix openssl` \
-OPENSSL_LIB_DIR=`brew --prefix openssl`/lib \
-OPENSSL_INCLUDE_DIR=`brew --prefix openssl`/include \
-cargo build
-```
-
-When running via `cargo run` you'll need to provide an initial `lichking`
-argument to simulate running as a cargo subcommand, e.g. `cargo run -- lichking
-check`.
+[Cargo]: https://github.com/rust-lang/cargo
+[License Slide]: http://www.dwheeler.com/essays/floss-license-slide.html

@@ -6,7 +6,6 @@ stages:
   if: tag IS present
 
 rust:
-  - 1.30.0
   - stable
   - beta
   - nightly
