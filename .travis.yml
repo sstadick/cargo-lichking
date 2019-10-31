@@ -11,15 +11,12 @@ script:
 
 matrix:
   include:
-  - name: cargo test
-    os: osx
-
-  - name: cargo test
-    os: windows
+  - os: osx
+  - os: windows
 
   - name: cargo clippy
     install:
-    - rustup component add clippy-preview
+    - rustup component add clippy
     script:
     - cargo clippy --all --all-targets -- -D warnings
 
