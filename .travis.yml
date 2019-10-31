@@ -73,3 +73,6 @@ addons:
       - kalakris-cmake
     packages:
       - cmake
+
+branches:
+  only: [staging, trying, master]
