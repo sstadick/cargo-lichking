@@ -1,12 +1,3 @@
-#![allow(unknown_lints)] // for clippy
-
-extern crate itertools;
-#[macro_use] extern crate clap;
-extern crate cargo;
-#[macro_use] extern crate failure;
-extern crate regex;
-extern crate void;
-
 mod bundle;
 mod check;
 mod discovery;
@@ -17,9 +8,9 @@ mod load;
 mod options;
 mod thirdparty;
 
-use cargo::{Config, CliResult};
+use cargo::{CliResult, Config};
 
-use options::{Options, Cmd};
+use crate::options::{Cmd, Options};
 
 fn main() {
     let matches = Options::app(false).get_matches();
@@ -39,9 +30,12 @@ fn real_main(options: Options, config: &mut Config) -> CliResult {
         options.frozen,
         options.locked,
         &None,
-        &[])?;
+        &[],
+    )?;
 
-    config.shell().warn("IANAL: This is not legal advice and is not guaranteed to be correct.")?;
+    config
+        .shell()
+        .warn("IANAL: This is not legal advice and is not guaranteed to be correct.")?;
 
     match options.cmd {
         Cmd::Check { package } => {
@@ -69,10 +63,15 @@ fn real_main(options: Options, config: &mut Config) -> CliResult {
         }
 
         Cmd::ThirdParty { full } => {
-            println!("cargo-lichking uses some third party libraries under their own license terms:");
+            println!(
+                "cargo-lichking uses some third party libraries under their own license terms:"
+            );
             println!();
             for krate in thirdparty::CRATES {
-                print!(" * {} v{} under the terms of {}", krate.name, krate.version, krate.licenses.name);
+                print!(
+                    " * {} v{} under the terms of {}",
+                    krate.name, krate.version, krate.licenses.name
+                );
                 if full {
                     println!(":");
                     let mut first = true;

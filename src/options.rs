@@ -1,9 +1,7 @@
-#![allow(large_enum_variant)]
-
 use std::str::FromStr;
 
 use cargo::core::PackageIdSpec;
-use clap::{ App, Arg, SubCommand, AppSettings, ArgMatches };
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 
 #[derive(Copy, Clone, Debug)]
 pub enum By {
@@ -20,22 +18,14 @@ pub enum SelectedPackage {
 
 #[derive(Clone, Debug)]
 pub enum Bundle {
-    Inline {
-        file: Option<String>,
-    },
-    NameOnly {
-        file: Option<String>,
-    },
-    Source {
-        file: Option<String>,
-    },
-    Split {
-        file: Option<String>,
-        dir: String,
-    },
+    Inline { file: Option<String> },
+    NameOnly { file: Option<String> },
+    Source { file: Option<String> },
+    Split { file: Option<String>, dir: String },
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     List {
         by: By,
@@ -65,18 +55,17 @@ pub struct Options {
 
 impl By {
     fn args() -> Vec<Arg<'static, 'static>> {
-        vec![
-            Arg::with_name("by")
-                .long("by")
-                .takes_value(true)
-                .possible_values(&["license", "crate"])
-                .default_value("license")
-                .help("Whether to list crates per license or licenses per crate"),
-        ]
+        vec![Arg::with_name("by")
+            .long("by")
+            .takes_value(true)
+            .possible_values(&["license", "crate"])
+            .default_value("license")
+            .help("Whether to list crates per license or licenses per crate")]
     }
 
     fn from_matches(matches: &ArgMatches) -> By {
-        matches.value_of("by")
+        matches
+            .value_of("by")
             .expect("defaulted")
             .parse()
             .expect("constrained")
@@ -90,9 +79,15 @@ impl SelectedPackage {
                 .long("all")
                 .help("Apply to all packages in workspace"),
             Arg::with_name("package")
-                .short("p").long("package")
-                .takes_value(true).value_name("SPEC")
-                .validator(|s| PackageIdSpec::parse(&s).map(|_| ()).map_err(|e| e.to_string()))
+                .short("p")
+                .long("package")
+                .takes_value(true)
+                .value_name("SPEC")
+                .validator(|s| {
+                    PackageIdSpec::parse(&s)
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
+                })
                 .help("Package to apply this command to"),
         ]
     }
@@ -115,7 +110,8 @@ impl SelectedPackage {
         if matches.is_present("all") {
             SelectedPackage::All
         } else {
-            matches.value_of("package")
+            matches
+                .value_of("package")
                 .map(|s| PackageIdSpec::parse(s).expect("validated"))
                 .map(SelectedPackage::Specific)
                 .unwrap_or(SelectedPackage::Default)
@@ -133,7 +129,8 @@ impl Bundle {
                 .default_value("inline")
                 .requires_if("split", "dir")
                 .help("")
-                .long_help("\
+                .long_help(
+                    "\
 What sort of bundle to produce:
 
     inline:
@@ -155,14 +152,17 @@ What sort of bundle to produce:
         separate file inside
 
 \
-                "),
+                ",
+                ),
             Arg::with_name("file")
                 .long("file")
-                .takes_value(true).value_name("FILE")
+                .takes_value(true)
+                .value_name("FILE")
                 .help("The file to output to (standard out if not specified)"),
             Arg::with_name("dir")
                 .long("dir")
-                .takes_value(true).value_name("DIR")
+                .takes_value(true)
+                .value_name("DIR")
                 .help("The directory to output to"),
         ]
     }
@@ -211,9 +211,9 @@ impl Options {
     // error output.
     pub fn subapp(subcommand_required: bool) -> App<'static, 'static> {
         let mut app = SubCommand::with_name("lichking")
-            .author(crate_authors!())
-            .version(crate_version!())
-            .about(crate_description!())
+            .author(clap::crate_authors!())
+            .version(clap::crate_version!())
+            .about(clap::crate_description!())
             .args(&Options::args())
             .subcommands(Options::subcommands());
         if subcommand_required {
@@ -225,15 +225,18 @@ impl Options {
     pub fn args() -> Vec<Arg<'static, 'static>> {
         vec![
             Arg::with_name("verbose")
-                .short("v").long("verbose")
+                .short("v")
+                .long("verbose")
                 .multiple(true)
                 .help("Use verbose output (-vv very verbose output)"),
             Arg::with_name("quiet")
-                .short("q").long("quiet")
+                .short("q")
+                .long("quiet")
                 .help("Use quiet output"),
             Arg::with_name("color")
                 .long("color")
-                .takes_value(true).value_name("COLOR")
+                .takes_value(true)
+                .value_name("COLOR")
                 .possible_values(&["auto", "always", "never"])
                 .help("Coloring"),
             Arg::with_name("frozen")
@@ -251,26 +254,21 @@ impl Options {
                 .about("Check that all dependencies have a compatible license with a package")
                 .args(&SelectedPackage::args())
                 .after_help(SelectedPackage::help()),
-
             SubCommand::with_name("list")
                 .about("List licensing of all dependencies")
                 .args(&By::args())
                 .args(&SelectedPackage::args())
                 .after_help(SelectedPackage::help()),
-
             SubCommand::with_name("bundle")
                 .about("Bundle all dependencies licenses ready for distribution")
                 .args(&Bundle::args())
                 .args(&SelectedPackage::args())
                 .after_help(SelectedPackage::help()),
-
             SubCommand::with_name("thirdparty")
                 .about("List dependencies of cargo-lichking")
-                .args(&[
-                    Arg::with_name("full")
-                        .long("full")
-                        .help("Whether to list license content for each dependency"),
-                ]),
+                .args(&[Arg::with_name("full")
+                    .long("full")
+                    .help("Whether to list license content for each dependency")]),
         ]
     }
 
@@ -283,28 +281,20 @@ impl Options {
             frozen: matches.is_present("frozen"),
             locked: matches.is_present("locked"),
             cmd: match matches.subcommand() {
-                ("check", Some(matches)) => {
-                    Cmd::Check {
-                        package: SelectedPackage::from_matches(matches),
-                    }
-                }
-                ("list", Some(matches)) => {
-                    Cmd::List {
-                        by: By::from_matches(matches),
-                        package: SelectedPackage::from_matches(matches),
-                    }
-                }
-                ("bundle", Some(matches)) => {
-                    Cmd::Bundle {
-                        variant: Bundle::from_matches(matches),
-                        package: SelectedPackage::from_matches(matches),
-                    }
-                }
-                ("thirdparty", Some(matches)) => {
-                    Cmd::ThirdParty {
-                        full: matches.is_present("full"),
-                    }
-                }
+                ("check", Some(matches)) => Cmd::Check {
+                    package: SelectedPackage::from_matches(matches),
+                },
+                ("list", Some(matches)) => Cmd::List {
+                    by: By::from_matches(matches),
+                    package: SelectedPackage::from_matches(matches),
+                },
+                ("bundle", Some(matches)) => Cmd::Bundle {
+                    variant: Bundle::from_matches(matches),
+                    package: SelectedPackage::from_matches(matches),
+                },
+                ("thirdparty", Some(matches)) => Cmd::ThirdParty {
+                    full: matches.is_present("full"),
+                },
                 (subcommand, _) => {
                     Options::app(true).get_matches();
                     panic!("Unexpected subcommand {}", subcommand)

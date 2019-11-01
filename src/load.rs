@@ -1,26 +1,20 @@
 use std::collections::HashSet;
 
 use cargo::core::dependency::Kind;
-use cargo::core::{ Package, Workspace };
+use cargo::core::{Package, Workspace};
 use cargo::ops;
 use cargo::util::important_paths::find_root_manifest_for_wd;
-use cargo::{ Config, CargoResult };
+use cargo::{CargoResult, Config};
 
-use options::SelectedPackage;
+use crate::options::SelectedPackage;
 
-pub fn resolve_roots(
-        config: &Config,
-        package: SelectedPackage) -> CargoResult<Vec<Package>> {
+pub fn resolve_roots(config: &Config, package: SelectedPackage) -> CargoResult<Vec<Package>> {
     let root_manifest = find_root_manifest_for_wd(config.cwd())?;
     let workspace = Workspace::new(&root_manifest, config)?;
 
     Ok(match package {
-        SelectedPackage::All => {
-            workspace.members().cloned().collect()
-        }
-        SelectedPackage::Default => {
-            vec![workspace.current()?.clone()]
-        }
+        SelectedPackage::All => workspace.members().cloned().collect(),
+        SelectedPackage::Default => vec![workspace.current()?.clone()],
         SelectedPackage::Specific(spec) => {
             let (packages, _) = ops::resolve_ws(&workspace)?;
             let package_id = spec.query(packages.package_ids())?;
@@ -29,16 +23,20 @@ pub fn resolve_roots(
     })
 }
 
-pub fn resolve_packages<'a, I: IntoIterator<Item=&'a Package>>(
-        config: &Config,
-        roots: I) -> CargoResult<Vec<Package>> {
+pub fn resolve_packages<'a, I: IntoIterator<Item = &'a Package>>(
+    config: &Config,
+    roots: I,
+) -> CargoResult<Vec<Package>> {
     let root_manifest = find_root_manifest_for_wd(config.cwd())?;
     let workspace = Workspace::new(&root_manifest, config)?;
 
     let (packages, resolve) = ops::resolve_ws(&workspace)?;
 
     let mut result = HashSet::new();
-    let mut to_check = roots.into_iter().map(|p| p.package_id()).collect::<Vec<_>>();
+    let mut to_check = roots
+        .into_iter()
+        .map(|p| p.package_id())
+        .collect::<Vec<_>>();
     while let Some(id) = to_check.pop() {
         if let Ok(package) = packages.get_one(id) {
             if result.insert(package) {

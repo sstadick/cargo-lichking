@@ -1,13 +1,13 @@
-use std::io::Read as R;
-use std::fs::{self, File};
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::Read as R;
+use std::path::{Path, PathBuf};
 
-use regex::Regex;
-use cargo::CargoResult;
 use cargo::core::Package;
+use cargo::CargoResult;
+use regex::Regex;
 
-use license::License;
+use crate::license::License;
 
 const HIGH_CONFIDENCE_LIMIT: f32 = 0.10;
 const LOW_CONFIDENCE_LIMIT: f32 = 0.15;
@@ -33,7 +33,9 @@ fn read(path: &Path) -> CargoResult<String> {
 
 fn add_frequencies(freq: &mut HashMap<String, u32>, text: &str) {
     for word in Regex::new(r"\w+").unwrap().find_iter(text) {
-        *freq.entry(word.as_str().to_lowercase().to_owned()).or_insert(0) += 1;
+        *freq
+            .entry(word.as_str().to_lowercase().to_owned())
+            .or_insert(0) += 1;
     }
 }
 
@@ -68,14 +70,14 @@ fn check_against_template(text: &str, license: &License) -> Confidence {
             if let Some(template) = license.template() {
                 add_frequencies(&mut template_freq, template)
             } else {
-                return Confidence::Unsure
+                return Confidence::Unsure;
             }
         }
         template_freq
     } else if let Some(template) = license.template() {
         calculate_frequency(template)
     } else {
-        return Confidence::Unsure
+        return Confidence::Unsure;
     };
 
     let total: u32 = template_freq.values().sum();
@@ -91,7 +93,10 @@ fn check_against_template(text: &str, license: &License) -> Confidence {
     }
 }
 
-pub fn find_generic_license_text(package: &Package, license: &License) -> CargoResult<Option<LicenseText>> {
+pub fn find_generic_license_text(
+    package: &Package,
+    license: &License,
+) -> CargoResult<Option<LicenseText>> {
     fn generic_license_name(name: &str) -> bool {
         name.to_uppercase() == "LICENSE"
             || name.to_uppercase() == "LICENCE"

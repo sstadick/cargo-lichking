@@ -1,47 +1,30 @@
 language: rust
 
-stages:
-- name: test
-- name: deploy
-  if: tag IS present
-
 rust:
-  - 1.30.0
-  - stable
-  - beta
-  - nightly
+- stable
+- beta
+- nightly
 
 script:
 - cargo test --all
 - cargo test --all --release
 
 matrix:
-  allow_failures:
-  - rust: nightly
   include:
-  - name: cargo test
-    os: osx
-
-  - name: cargo test
-    os: windows
-
-  - name: cargo test -Z minimal-versions
-    rust: nightly
-    script:
-    - cargo update -Z minimal-versions
-    - cargo test --all
-
-  # - name: cargo fmt
-  #   install:
-  #   - rustup component add rustfmt-preview
-  #   script:
-  #   - cargo fmt --all -- --check
+  - os: osx
+  - os: windows
 
   - name: cargo clippy
     install:
-    - rustup component add clippy-preview
+    - rustup component add clippy
     script:
     - cargo clippy --all --all-targets -- -D warnings
+
+  - name: cargo fmt
+    install:
+    - rustup component add rustfmt
+    script:
+    - cargo fmt --all -- --check
 
   - name: diff src/thirdparty.rs
     script:
@@ -50,22 +33,6 @@ matrix:
         echo '    cargo run -- lichking bundle --variant source --file src/thirdparty.rs';
         exit 1
       )
-
-  - stage: deploy
-    rust: stable
-    script:
-    - grep 'version = "'"$TRAVIS_TAG"'"' Cargo.toml || (
-        echo 'Tag does not match version in Cargo.toml';
-        exit 1
-      )
-    - gpg --import .authorized_keys
-    - git tag --verify "$TRAVIS_TAG"
-    deploy:
-      provider: cargo
-      token:
-        secure: "RpLcy2WZZuLeXFcqRo7UTPMYu2/qm4MRCoodaAxkMwk6ziuY22C2EVkmUe7r8OwemeIGwVTV+1NCJl7KSBTaN73L3PzN0BwcOo1slU7x9c80xSKbIdQxZUvoD/hrMwyaJ+ADOx504FUdXum5GNTVg47jssnnnC9gTvgXX0Ri2XpMGIUWf7/zIWiVD6H/0FTjb5XKqnjTaMA/A8jt2IqxAw6H/voBgfFFbbUgrH8PIEr8wAENlZZG+bVv7axpCvaCF8JgrL9blaAaEUaXNVUL8i07uiyFSZOl1FRB/V1QdS8jz46IG7lujzyzVRDr6Qco5p94GKpPLaSbI5tUypnB+NmibHf1zA/LUWT+FmfAT4lHCB2+taobKWvSwEzafoELMUYTIOYVr1KFjVfvKcm1MvTMCcsn2WwNTG5PhVleEGCxnawWYA9Ie+QNFgeRsfg963nhjKUaQTr1LCaPQmOKvzASY95SwyZGR6R77KZcNrmwtNgE0iLzzqwdNmIc/i/2/9AwNOKRLPNkgRHYp3vtxit2doiaw8M3EbRb18FRKjNqh8joY/pCE5hClV9ZRE/mV7Tps+yEsTxw4B8jSqkiVzBl4GmGR+zxyzq/k1aidrsLroMRtXT8BBY36ZLryusWRx0T650QBYEc9U9erU+drWmZb9qylz++x8zrJyqArT4="
-      on:
-        all_branches: true
 
 addons:
   apt:

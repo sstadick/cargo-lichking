@@ -4,8 +4,8 @@ use cargo::core::Package;
 use cargo::CargoResult;
 use itertools::Itertools;
 
-use licensed::Licensed;
-use options::By;
+use crate::licensed::Licensed;
+use crate::options::By;
 
 pub fn run(mut packages: Vec<Package>, by: By) -> CargoResult<()> {
     match by {
