@@ -25,6 +25,7 @@ pub enum Bundle {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     List {
         by: By,

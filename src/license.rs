@@ -47,9 +47,8 @@ macro_rules! compatibility {
   ($s:expr, $o:expr, { $($a:pat => [$($b:pat),+])+ }) => {
     match $s {
       $(
-        $a => match $o {
-          $($b)|+ => return Some(true),
-          _ => (),
+        $a => if let $($b)|+ = $o {
+          return Some(true);
         }
       ),*
     }
