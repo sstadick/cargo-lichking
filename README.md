@@ -1,4 +1,4 @@
-# cargo-lichking [![travis-badge][]][travis] ![crate-badge][]][crate] [![license-badge][]][license] [![rust-version-badge][]][rust-version]
+# cargo-lichking [![travis-badge][]][travis] [![crate-badge][]][crate] [![license-badge][]][license] [![rust-version-badge][]][rust-version]
 
 Automated **li**cense **ch**ec**king** for rust. `cargo lichking` is a [Cargo][]
 subcommand that checks licensing information for dependencies.
