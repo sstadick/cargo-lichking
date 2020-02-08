@@ -118,7 +118,7 @@ pub const CRATES: &[LicensedCrate] = &[
 
     LicensedCrate {
         name: "cargo-lichking",
-        version: "0.8.0",
+        version: "0.9.0",
         licenses: Licenses {
             name: "MIT / Apache-2.0",
             licenses: &[
