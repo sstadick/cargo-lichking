@@ -2,8 +2,6 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use void::Void;
-
 #[derive(Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 #[allow(non_camel_case_types)]
 pub enum License {
@@ -158,8 +156,9 @@ impl License {
 }
 
 impl FromStr for License {
-    type Err = Void;
-    fn from_str(s: &str) -> Result<License, Void> {
+    type Err = core::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<License, core::convert::Infallible> {
         Ok(match s.trim() {
             "Unlicense" => License::Unlicense,
             "0BSD" => License::BSD_0_Clause,

@@ -1,10 +1,8 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Read as R;
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::path::PathBuf;
 
-use cargo::core::Package;
-use cargo::CargoResult;
+use cargo_metadata::Package;
 use regex::Regex;
 
 use crate::license::License;
@@ -23,12 +21,6 @@ pub struct LicenseText {
     pub path: PathBuf,
     pub text: String,
     pub confidence: Confidence,
-}
-
-fn read(path: &Path) -> CargoResult<String> {
-    let mut s = String::new();
-    File::open(path)?.read_to_string(&mut s)?;
-    Ok(s)
 }
 
 fn add_frequencies(freq: &mut HashMap<String, u32>, text: &str) {
@@ -96,7 +88,7 @@ fn check_against_template(text: &str, license: &License) -> Confidence {
 pub fn find_generic_license_text(
     package: &Package,
     license: &License,
-) -> CargoResult<Option<LicenseText>> {
+) -> anyhow::Result<Option<LicenseText>> {
     fn generic_license_name(name: &str) -> bool {
         name.to_uppercase() == "LICENSE"
             || name.to_uppercase() == "LICENCE"
@@ -104,13 +96,13 @@ pub fn find_generic_license_text(
             || name.to_uppercase() == "LICENSE.TXT"
     }
 
-    for entry in fs::read_dir(package.root())? {
+    for entry in fs::read_dir(package.manifest_path.parent().unwrap())? {
         let entry = entry?;
         let path = entry.path().to_owned();
         let name = entry.file_name().to_string_lossy().into_owned();
 
         if generic_license_name(&name) {
-            if let Ok(text) = read(&path) {
+            if let Ok(text) = fs::read_to_string(&path) {
                 let confidence = check_against_template(&text, license);
                 return Ok(Some(LicenseText {
                     path,
@@ -124,13 +116,7 @@ pub fn find_generic_license_text(
     Ok(None)
 }
 
-pub fn find_license_text(package: &Package, license: &License) -> CargoResult<Vec<LicenseText>> {
-    fn read(path: &Path) -> CargoResult<String> {
-        let mut s = String::new();
-        File::open(path)?.read_to_string(&mut s)?;
-        Ok(s)
-    }
-
+pub fn find_license_text(package: &Package, license: &License) -> anyhow::Result<Vec<LicenseText>> {
     fn name_matches(name: &str, license: &License) -> bool {
         let name = name.to_uppercase();
         match *license {
@@ -147,13 +133,13 @@ pub fn find_license_text(package: &Package, license: &License) -> CargoResult<Ve
     }
 
     let mut texts = Vec::new();
-    for entry in fs::read_dir(package.root())? {
+    for entry in fs::read_dir(package.manifest_path.parent().unwrap())? {
         let entry = entry?;
         let path = entry.path().to_owned();
         let name = entry.file_name().to_string_lossy().into_owned();
 
         if name_matches(&name, license) {
-            if let Ok(text) = read(&path) {
+            if let Ok(text) = fs::read_to_string(&path) {
                 let confidence = check_against_template(&text, license);
                 texts.push(LicenseText {
                     path,

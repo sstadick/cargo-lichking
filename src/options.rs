@@ -1,7 +1,9 @@
 use std::str::FromStr;
 
-use cargo::core::PackageIdSpec;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+
+// TODO
+pub type PackageIdSpec = String;
 
 #[derive(Copy, Clone, Debug)]
 pub enum By {
@@ -82,23 +84,16 @@ impl SelectedPackage {
                 .short("p")
                 .long("package")
                 .takes_value(true)
-                .value_name("SPEC")
-                .validator(|s| {
-                    PackageIdSpec::parse(&s)
-                        .map(|_| ())
-                        .map_err(|e| e.to_string())
-                })
+                .value_name("NAME")
                 .help("Package to apply this command to"),
         ]
     }
 
     fn help() -> &'static str {
         "\
-            If the --package argument is given, then SPEC is a package id \
-            specification which indicates which package this command should \
-            apply to. If it is not given, then the current package is used. \
-            For more information on SPEC and its format, see the `cargo help \
-            pkgid` command.
+            If the --package argument is given, then NAME is a package name which \
+            indicates which package this command should apply to. If it is not given, \
+            then the current package is used.
 
 \
             All packages in the workspace are used if the `--all` flag is supplied. \
@@ -112,7 +107,7 @@ impl SelectedPackage {
         } else {
             matches
                 .value_of("package")
-                .map(|s| PackageIdSpec::parse(s).expect("validated"))
+                .map(|s| s.to_owned())
                 .map(SelectedPackage::Specific)
                 .unwrap_or(SelectedPackage::Default)
         }
