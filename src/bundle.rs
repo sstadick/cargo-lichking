@@ -2,8 +2,8 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
 
-use cargo::core::{Package, Shell};
-use cargo::{CargoResult, Config};
+use anyhow::anyhow;
+use cargo_metadata::Package;
 
 use crate::discovery::{find_generic_license_text, find_license_text, Confidence, LicenseText};
 use crate::license::License;
@@ -12,33 +12,31 @@ use crate::options::Bundle;
 
 struct Context<'a> {
     roots_name: String,
-    packages: &'a [Package],
-    shell: &'a mut Shell,
+    packages: &'a [&'a Package],
 
     missing_license: bool,
     low_quality_license: bool,
 }
 
-pub fn run(
-    roots: &[Package],
-    mut packages: Vec<Package>,
-    config: &Config,
-    variant: Bundle,
-) -> CargoResult<()> {
-    packages.sort_by(|p1, p2| (p1.name(), p1.version()).cmp(&(p2.name(), p2.version())));
+pub fn run(roots: &[&Package], packages: &[&Package], variant: Bundle) -> anyhow::Result<()> {
+    let packages = {
+        let mut packages = packages.to_owned();
+        packages.sort_by_key(|p| (&p.name, &p.version));
+        packages
+    };
 
     let roots_name = {
         if roots.len() == 1 {
-            format!("{} package", roots[0].name())
+            format!("{} package", roots[0].name)
         } else {
             let mut roots_name = String::new();
-            roots_name += roots[0].name().as_str();
+            roots_name += roots[0].name.as_str();
             for root in roots.iter().take(roots.len() - 1).skip(1) {
                 roots_name += ", ";
-                roots_name += root.name().as_str();
+                roots_name += root.name.as_str();
             }
             roots_name += " and ";
-            roots_name += roots.last().unwrap().name().as_str();
+            roots_name += roots.last().unwrap().name.as_str();
             roots_name += " packages";
             roots_name
         }
@@ -46,7 +44,6 @@ pub fn run(
     let mut context = Context {
         roots_name,
         packages: &packages,
-        shell: &mut config.shell(),
         missing_license: false,
         low_quality_license: false,
     };
@@ -83,7 +80,7 @@ pub fn run(
     }
 
     if context.missing_license {
-        context.shell.error(
+        log::error!(
             "
   Our liches failed to recognise a license in one or more packages.
 
@@ -97,25 +94,25 @@ pub fn run(
 
   If there isn't you could submit an issue to the package's project asking
   them to include the text of their license in the built packages.",
-        )?;
+        );
     }
 
     if context.low_quality_license {
-        context.shell.error(
+        log::error!(
             "\
              Our liches are very unsure about one or more licenses that were put into the \
              bundle. Please check the specific error messages above.",
-        )?;
+        );
     }
 
     if context.missing_license || context.low_quality_license {
-        failure::bail!("Generating bundle finished with error(s)")
+        Err(anyhow!("Generating bundle finished with error(s)"))
     } else {
         Ok(())
     }
 }
 
-fn inline(context: &mut Context, out: &mut dyn io::Write) -> CargoResult<()> {
+fn inline(context: &mut Context, out: &mut dyn io::Write) -> anyhow::Result<()> {
     writeln!(
         out,
         "The {} uses some third party libraries under their own license terms:",
@@ -126,9 +123,9 @@ fn inline(context: &mut Context, out: &mut dyn io::Write) -> CargoResult<()> {
         writeln!(
             out,
             " * {} {} under the terms of {}:",
-            package.name(),
-            package.version(),
-            package.license()
+            package.name,
+            package.version,
+            package.license(),
         )?;
         writeln!(out)?;
         inline_package(context, package, out)?;
@@ -137,7 +134,7 @@ fn inline(context: &mut Context, out: &mut dyn io::Write) -> CargoResult<()> {
     Ok(())
 }
 
-fn name_only(context: &mut Context, out: &mut dyn io::Write) -> CargoResult<()> {
+fn name_only(context: &mut Context, out: &mut dyn io::Write) -> anyhow::Result<()> {
     writeln!(
         out,
         "The {} uses some third party libraries under their own license terms:",
@@ -148,15 +145,15 @@ fn name_only(context: &mut Context, out: &mut dyn io::Write) -> CargoResult<()> 
         writeln!(
             out,
             " * {} {} under the terms of {}",
-            package.name(),
-            package.version(),
-            package.license()
+            package.name,
+            package.version,
+            package.license(),
         )?;
     }
     Ok(())
 }
 
-fn source(context: &mut Context, out: &mut dyn io::Write) -> CargoResult<()> {
+fn source(context: &mut Context, out: &mut dyn io::Write) -> anyhow::Result<()> {
     out.write_all(
         b"\
 //! Licenses of dependencies
@@ -193,7 +190,7 @@ fn split<P: AsRef<Path>>(
     context: &mut Context,
     out: &mut dyn io::Write,
     dir: P,
-) -> CargoResult<()> {
+) -> anyhow::Result<()> {
     fs::create_dir_all(dir.as_ref())?;
     writeln!(
         out,
@@ -205,9 +202,9 @@ fn split<P: AsRef<Path>>(
         writeln!(
             out,
             " * {} {} under the terms of {}",
-            package.name(),
-            package.version(),
-            package.license()
+            package.name,
+            package.version,
+            package.license(),
         )?;
         split_package(context, package, dir.as_ref())?;
     }
@@ -218,30 +215,26 @@ fn inline_package(
     context: &mut Context,
     package: &Package,
     out: &mut dyn io::Write,
-) -> CargoResult<()> {
+) -> anyhow::Result<()> {
     let license = package.license();
     if let Some(text) = find_generic_license_text(package, &license)? {
         match text.confidence {
             Confidence::Confident => (),
             Confidence::SemiConfident => {
-                context.shell.warn(format_args!(
+                log::warn!(
                     "{} has only a low-confidence candidate for license {}:",
-                    package.name(),
+                    package.name,
                     license
-                ))?;
-                context
-                    .shell
-                    .warn(format_args!("    {}", text.path.display()))?;
+                );
+                log::warn!("    {}", text.path.display());
             }
             Confidence::Unsure => {
-                context.shell.error(format_args!(
+                log::error!(
                     "{} has only a very low-confidence candidate for license {}:",
-                    package.name(),
+                    package.name,
                     license
-                ))?;
-                context
-                    .shell
-                    .error(format_args!("    {}", text.path.display()))?;
+                );
+                log::error!("    {}", text.path.display());
             }
         }
         for line in text.text.lines() {
@@ -250,10 +243,7 @@ fn inline_package(
     } else {
         match license {
             License::Unspecified => {
-                context.shell.error(format_args!(
-                    "{} does not specify a license",
-                    package.name()
-                ))?;
+                log::error!("{} does not specify a license", package.name);
             }
             License::Multiple(licenses) => {
                 let mut first = true;
@@ -281,30 +271,26 @@ fn source_package(
     context: &mut Context,
     package: &Package,
     out: &mut dyn io::Write,
-) -> CargoResult<()> {
+) -> anyhow::Result<()> {
     let license = package.license();
     if let Some(text) = find_generic_license_text(package, &license)? {
         match text.confidence {
             Confidence::Confident => (),
             Confidence::SemiConfident => {
-                context.shell.warn(format_args!(
+                log::warn!(
                     "{} has only a low-confidence candidate for license {}:",
-                    package.name(),
+                    package.name,
                     license
-                ))?;
-                context
-                    .shell
-                    .warn(format_args!("    {}", text.path.display()))?;
+                );
+                log::warn!("    {}", text.path.display());
             }
             Confidence::Unsure => {
-                context.shell.error(format_args!(
+                log::error!(
                     "{} has only a very low-confidence candidate for license {}:",
-                    package.name(),
+                    package.name,
                     license
-                ))?;
-                context
-                    .shell
-                    .error(format_args!("    {}", text.path.display()))?;
+                );
+                log::error!("    {}", text.path.display());
             }
         }
         writeln!(
@@ -323,8 +309,8 @@ fn source_package(
             ],
         }},
     }},",
-            package.name(),
-            package.version().to_string(),
+            package.name,
+            package.version.to_string(),
             license.to_string(),
             license.to_string(),
             text.text
@@ -333,10 +319,7 @@ fn source_package(
         let license_name = license.to_string();
         match license {
             License::Unspecified => {
-                context.shell.error(format_args!(
-                    "{} does not specify a license",
-                    package.name()
-                ))?;
+                log::error!("{} does not specify a license", package.name);
             }
             License::Multiple(licenses) => {
                 writeln!(
@@ -348,8 +331,8 @@ fn source_package(
         licenses: Licenses {{
             name: {:?},
             licenses: &[",
-                    package.name(),
-                    package.version().to_string(),
+                    package.name,
+                    package.version.to_string(),
                     license_name
                 )?;
                 for license in licenses {
@@ -397,8 +380,8 @@ fn source_package(
             ],
         }},
     }},",
-                    package.name(),
-                    package.version().to_string(),
+                    package.name,
+                    package.version.to_string(),
                     license.to_string(),
                     license.to_string(),
                     text
@@ -410,41 +393,34 @@ fn source_package(
     Ok(())
 }
 
-fn split_package(context: &mut Context, package: &Package, dir: &Path) -> CargoResult<()> {
+fn split_package(context: &mut Context, package: &Package, dir: &Path) -> anyhow::Result<()> {
     let license = package.license();
-    let mut file = File::create(dir.join(package.name().as_str()))?;
+    let mut file = File::create(dir.join(package.name.as_str()))?;
     if let Some(text) = find_generic_license_text(package, &license)? {
         match text.confidence {
             Confidence::Confident => (),
             Confidence::SemiConfident => {
-                context.shell.warn(format_args!(
+                log::warn!(
                     "{} has only a low-confidence candidate for license {}:",
-                    package.name(),
+                    package.name,
                     license
-                ))?;
-                context
-                    .shell
-                    .warn(format_args!("    {}", text.path.display()))?;
+                );
+                log::warn!("    {}", text.path.display());
             }
             Confidence::Unsure => {
-                context.shell.error(format_args!(
+                log::error!(
                     "{} has only a very low-confidence candidate for license {}:",
-                    package.name(),
+                    package.name,
                     license
-                ))?;
-                context
-                    .shell
-                    .error(format_args!("    {}", text.path.display()))?;
+                );
+                log::error!("    {}", text.path.display());
             }
         }
         file.write_all(text.text.as_bytes())?;
     } else {
         match license {
             License::Unspecified => {
-                context.shell.error(format_args!(
-                    "{} does not specify a license",
-                    package.name()
-                ))?;
+                log::error!("{} does not specify a license", package.name);
             }
             License::Multiple(licenses) => {
                 let mut first = true;
@@ -478,7 +454,7 @@ fn inline_license(
     package: &Package,
     license: &License,
     out: &mut dyn io::Write,
-) -> CargoResult<()> {
+) -> anyhow::Result<()> {
     let texts = find_license_text(package, license)?;
     if let Some(text) = choose(context, package, license, texts)? {
         for line in text.text.lines() {
@@ -493,7 +469,7 @@ fn choose(
     package: &Package,
     license: &License,
     texts: Vec<LicenseText>,
-) -> CargoResult<Option<LicenseText>> {
+) -> anyhow::Result<Option<LicenseText>> {
     let (mut confident, texts): (Vec<LicenseText>, Vec<LicenseText>) = texts
         .into_iter()
         .partition(|text| text.confidence == Confidence::Confident);
@@ -505,71 +481,61 @@ fn choose(
         if confident.len() == 1 {
             confident.swap_remove(0)
         } else if confident.len() > 1 {
-            context.shell.error(format_args!(
+            log::error!(
                 "{} has multiple candidates for license {}:",
-                package.name(),
+                package.name,
                 license
-            ))?;
+            );
             for text in &confident {
-                context
-                    .shell
-                    .error(format_args!("    {}", text.path.display()))?;
+                log::error!("    {}", text.path.display());
             }
             confident.swap_remove(0)
         } else if semi_confident.len() == 1 {
-            context.shell.warn(format_args!(
-                "{} has only a low-confidence candidate for license {}:",
-                package.name(),
-                license
-            ))?;
-            context
-                .shell
-                .warn(format_args!("    {}", semi_confident[0].path.display()))?;
+            log::warn!(
+                "{} has only a low-confidence candidate for license {}:\n    {}",
+                package.name,
+                license,
+                semi_confident[0].path.display(),
+            );
             semi_confident.swap_remove(0)
         } else if semi_confident.len() > 1 {
             context.low_quality_license = true;
-            context.shell.error(format_args!(
+            log::error!(
                 "{} has multiple low-confidence candidates for license {}:",
-                package.name(),
+                package.name,
                 license
-            ))?;
+            );
             for text in &semi_confident {
-                context
-                    .shell
-                    .error(format_args!("    {}", text.path.display()))?;
+                log::error!("    {}", text.path.display());
             }
             semi_confident.swap_remove(0)
         } else if unconfident.len() == 1 {
             context.low_quality_license = true;
-            context.shell.warn(format_args!(
-                "{} has only a very low-confidence candidate for license {}:",
-                package.name(),
-                license
-            ))?;
-            context
-                .shell
-                .warn(format_args!("    {}", unconfident[0].path.display()))?;
+            log::warn!(
+                "{} has only a very low-confidence candidate for license {}:\n    {}",
+                package.name,
+                license,
+                unconfident[0].path.display(),
+            );
             unconfident.swap_remove(0)
         } else if unconfident.len() > 1 {
             context.low_quality_license = true;
-            context.shell.error(format_args!(
+            log::error!(
                 "{} has multiple very low-confidence candidates for license {}:",
-                package.name(),
+                package.name,
                 license
-            ))?;
+            );
             for text in &unconfident {
-                context
-                    .shell
-                    .error(format_args!("    {}", text.path.display()))?;
+                log::error!("    {}", text.path.display());
             }
             unconfident.swap_remove(0)
         } else {
-            context.shell.error(format_args!(
+            log::error!(
                 "{} has no candidate texts for license {} in {}",
-                package.name(),
+                package.name,
                 license,
-                package.root().display()
-            ))?;
+                package.manifest_path.parent().unwrap().display()
+            );
             context.missing_license = true;
             return Ok(None);
         }

@@ -1,4 +1,4 @@
-use cargo::core::Package;
+use cargo_metadata::Package;
 
 use crate::license::License;
 
@@ -8,18 +8,10 @@ pub trait Licensed {
 
 impl Licensed for Package {
     fn license(&self) -> License {
-        let metadata = self.manifest().metadata();
-        metadata
-            .license
+        self.license
             .as_ref()
             .and_then(|license| license.parse::<License>().ok())
-            .or_else(|| {
-                metadata
-                    .license_file
-                    .as_ref()
-                    .and_then(|file| self.root().join(file).canonicalize().ok())
-                    .map(License::File)
-            })
+            .or_else(|| self.license_file().map(License::File))
             .unwrap_or_default()
     }
 }
