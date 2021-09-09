@@ -5,12 +5,14 @@ use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 // TODO
 pub type PackageIdSpec = String;
 
+/// Whether to list crates per license or licenses per crate.
 #[derive(Copy, Clone, Debug)]
 pub enum By {
     License,
     Crate,
 }
 
+/// [`SelectedPackage`] determines which packages to collection license information on.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SelectedPackage {
     All,
@@ -18,40 +20,48 @@ pub enum SelectedPackage {
     Specific(PackageIdSpec),
 }
 
+/// [`Bundle`] controls how the license information is collected and displayed.
 #[derive(Clone, Debug)]
 pub enum Bundle {
+    /// Write both the name and content of the license used by each dependency.
     Inline { file: Option<String> },
+    /// Write only the name of the license use by each dependency.
     NameOnly { file: Option<String> },
+    /// Output Rust code that can output the name and content of the license used by each dependency
     Source { file: Option<String> },
+    /// Write the name of the license used by each dependency to a file, and write a file with the license content to dir.
     Split { file: Option<String>, dir: String },
 }
 
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Cmd {
-    List {
-        by: By,
-        package: SelectedPackage,
-    },
-    Check {
-        package: SelectedPackage,
-    },
+    /// List licensing of all dependencies.
+    List { by: By, package: SelectedPackage },
+    /// Check that all dependencies have a compatible license with a package.
+    Check { package: SelectedPackage },
+    /// Bundle all dependencies licenses ready for distribution
     Bundle {
         variant: Bundle,
         package: SelectedPackage,
     },
-    ThirdParty {
-        full: bool,
-    },
+    /// List dependencies of cargo-lichking
+    ThirdParty { full: bool },
 }
 
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Use verbose output
     pub verbose: u32,
+    /// Use quiet output
     pub quiet: bool,
+    /// Use color in outputs
     pub color: Option<String>,
+    /// Require that `Cargo.lock` and cache are up to date
     pub frozen: bool,
+    /// Require `Cargo.lock` is up to date
     pub locked: bool,
+    /// The [`Cmd`] to run
     pub cmd: Cmd,
 }
 
@@ -108,8 +118,7 @@ impl SelectedPackage {
             matches
                 .value_of("package")
                 .map(|s| s.to_owned())
-                .map(SelectedPackage::Specific)
-                .unwrap_or(SelectedPackage::Default)
+                .map_or(SelectedPackage::Default, SelectedPackage::Specific)
         }
     }
 }
@@ -123,7 +132,7 @@ impl Bundle {
                 .possible_values(&["inline", "name-only", "source", "split"])
                 .default_value("inline")
                 .requires_if("split", "dir")
-                .help("")
+                .help("Use long help to see more.")
                 .long_help(
                     "\
 What sort of bundle to produce:

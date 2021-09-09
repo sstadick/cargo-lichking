@@ -4,19 +4,22 @@ use std::path::PathBuf;
 
 use cargo_metadata::Package;
 use regex::Regex;
+use slug::slugify;
 
-use crate::license::License;
+use crate::license::{self, License};
 
 const HIGH_CONFIDENCE_LIMIT: f32 = 0.10;
 const LOW_CONFIDENCE_LIMIT: f32 = 0.15;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Confidence {
     Confident,
     SemiConfident,
     Unsure,
+    NoTemplate,
 }
 
+#[derive(Debug)]
 pub struct LicenseText {
     pub path: PathBuf,
     pub text: String,
@@ -62,14 +65,14 @@ fn check_against_template(text: &str, license: &License) -> Confidence {
             if let Some(template) = license.template() {
                 add_frequencies(&mut template_freq, template)
             } else {
-                return Confidence::Unsure;
+                return Confidence::NoTemplate;
             }
         }
         template_freq
     } else if let Some(template) = license.template() {
         calculate_frequency(template)
     } else {
-        return Confidence::Unsure;
+        return Confidence::NoTemplate;
     };
 
     let total: u32 = template_freq.values().sum();
@@ -83,6 +86,70 @@ fn check_against_template(text: &str, license: &License) -> Confidence {
     } else {
         Confidence::Unsure
     }
+}
+
+pub fn better_find(package: &Package, license: &License) -> anyhow::Result<Vec<LicenseText>> {
+    /// Is this a generic license name
+    fn generic_license_name(name: &str) -> bool {
+        name.to_uppercase() == "LICENSE"
+            || name.to_uppercase() == "LICENCE"
+            || name.to_uppercase() == "LICENSE.MD"
+            || name.to_uppercase() == "LICENSE.TXT"
+    }
+
+    fn name_matches(name: &str, license: &License) -> bool {
+        let name = slugify(name).to_lowercase();
+        match *license {
+            License::Custom(ref custom) => {
+                let custom = slugify(custom).to_lowercase();
+                name == custom || (name.contains("license") && name.contains(&custom))
+            }
+            ref license => {
+                let mut found = false;
+                for lic in license.synonyms() {
+                    if name == lic || (name.contains("license") && name.contains(&lic)) {
+                        found = true;
+                        break;
+                    }
+                }
+                found
+            }
+        }
+    }
+
+    let mut generic = None;
+    let mut texts = vec![];
+    for entry in fs::read_dir(package.manifest_path.parent().unwrap())? {
+        let entry = entry?;
+        let path = entry.path().clone();
+        let name = entry.file_name().to_string_lossy().into_owned();
+
+        if name_matches(&name, license) {
+            if let Ok(text) = fs::read_to_string(&path) {
+                let confidence = check_against_template(&text, license);
+                texts.push(LicenseText {
+                    path,
+                    text,
+                    confidence,
+                });
+            }
+        } else if generic_license_name(&name) {
+            if let Ok(text) = fs::read_to_string(&path) {
+                let confidence = check_against_template(&text, license);
+                generic = Some(LicenseText {
+                    path,
+                    text,
+                    confidence,
+                });
+            }
+        }
+    }
+
+    if texts.is_empty() && generic.is_some() {
+        texts.push(generic.unwrap());
+    }
+
+    Ok(texts)
 }
 
 pub fn find_generic_license_text(

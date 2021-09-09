@@ -2,6 +2,8 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use slug::slugify;
+
 #[derive(Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 #[allow(non_camel_case_types)]
 pub enum License {
@@ -232,6 +234,42 @@ impl fmt::Display for License {
                 Ok(())
             }
             License::Unspecified => write!(w, "No license specified"),
+        }
+    }
+}
+
+impl License {
+    /// slugified synonyms
+    pub fn synonyms(&self) -> Vec<String> {
+        match self {
+            License::Apache_2_0 => vec![
+                slugify(self.to_string()).to_lowercase(),
+                String::from("apache"),
+            ],
+            License::Unlicense
+            | License::BSD_0_Clause
+            | License::CC0_1_0
+            | License::MIT
+            | License::X11
+            | License::BSD_2_Clause
+            | License::BSD_3_Clause
+            | License::LGPL_2_0
+            | License::LGPL_2_1
+            | License::LGPL_2_1Plus
+            | License::LGPL_3_0
+            | License::LGPL_3_0Plus
+            | License::MPL_1_1
+            | License::MPL_2_0
+            | License::GPL_2_0
+            | License::GPL_2_0Plus
+            | License::GPL_3_0
+            | License::GPL_3_0Plus
+            | License::AGPL_3_0
+            | License::AGPL_3_0Plus
+            | License::Custom(_)
+            | License::File(_)
+            | License::Multiple(_)
+            | License::Unspecified => vec![slugify(self.to_string()).to_lowercase()],
         }
     }
 }

@@ -19,10 +19,11 @@ struct Manifest {
     workspace: Workspace,
 }
 
-pub fn resolve_roots<'a>(
-    metadata: &'a Metadata,
+/// Collect the top level packages
+pub fn resolve_roots(
+    metadata: &Metadata,
     package: SelectedPackage,
-) -> anyhow::Result<Vec<&'a Package>> {
+) -> anyhow::Result<Vec<&Package>> {
     match package {
         SelectedPackage::All => metadata
             .workspace_members
@@ -44,25 +45,30 @@ pub fn resolve_roots<'a>(
                     path.push("Cargo.toml");
                     path
                 })?)?;
-                if let Some(default_members) = manifest.workspace.default_members {
-                    default_members
-                        .iter()
-                        .map(|name| {
-                            metadata
-                                .workspace_members
-                                .iter()
-                                .filter_map(|id| metadata.packages.by_id(id).ok())
-                                .find(|p| &p.name == name)
-                                .ok_or_else(|| anyhow!("Couldn't find workspace member {}", name))
-                        })
-                        .collect()
-                } else {
-                    metadata
-                        .workspace_members
-                        .iter()
-                        .map(|id| metadata.packages.by_id(id))
-                        .collect()
-                }
+                manifest.workspace.default_members.map_or_else(
+                    || {
+                        metadata
+                            .workspace_members
+                            .iter()
+                            .map(|id| metadata.packages.by_id(id))
+                            .collect()
+                    },
+                    |default_members| {
+                        default_members
+                            .iter()
+                            .map(|name| {
+                                metadata
+                                    .workspace_members
+                                    .iter()
+                                    .filter_map(|id| metadata.packages.by_id(id).ok())
+                                    .find(|p| &p.name == name)
+                                    .ok_or_else(|| {
+                                        anyhow!("Couldn't find workspace member {}", name)
+                                    })
+                            })
+                            .collect()
+                    },
+                )
             }
         }
         SelectedPackage::Specific(name) => Ok(vec![metadata
@@ -73,6 +79,7 @@ pub fn resolve_roots<'a>(
     }
 }
 
+/// Get the dependencies for the top level packages
 pub fn resolve_packages<'a>(
     metadata: &'a Metadata,
     roots: &'a [&'a Package],

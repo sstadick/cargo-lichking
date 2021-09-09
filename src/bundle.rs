@@ -5,19 +5,51 @@ use std::path::Path;
 use anyhow::anyhow;
 use cargo_metadata::Package;
 
-use crate::discovery::{find_generic_license_text, find_license_text, Confidence, LicenseText};
+use crate::discovery::{
+    better_find, find_generic_license_text, find_license_text, Confidence, LicenseText,
+};
 use crate::license::License;
 use crate::licensed::Licensed;
 use crate::options::Bundle;
 
+#[derive(Debug)]
+enum LicenseIssues {
+    /// The LICENSE type files contents do not match the expected confidence
+    LowConfidence {
+        package_name: String,
+        license: String,
+        confidence: Confidence,
+    },
+    MultiplePossible {
+        package_name: String,
+        license: String,
+        // TODO: list them?
+    },
+    /// There is no LICENSE type file for the given license
+    Missing {
+        package_name: String,
+        license: String,
+    },
+    /// The package does not specify a LICENSE
+    Unspecified { package_name: String },
+    /// There is nothing to compare the content of the LICENSE type file to
+    UnverifiableContent {
+        package_name: String,
+        license: String,
+    },
+}
+
+/// Hold state that will be used to determine the overall exit value of the program
 struct Context<'a> {
     roots_name: String,
     packages: &'a [&'a Package],
+    issues: Vec<LicenseIssues>,
 
     missing_license: bool,
     low_quality_license: bool,
 }
 
+/// Collect all licenses for selected packages and display them as per [`Bundle`].
 pub fn run(roots: &[&Package], packages: &[&Package], variant: Bundle) -> anyhow::Result<()> {
     let packages = {
         let mut packages = packages.to_owned();
@@ -41,9 +73,11 @@ pub fn run(roots: &[&Package], packages: &[&Package], variant: Bundle) -> anyhow
             roots_name
         }
     };
+
     let mut context = Context {
         roots_name,
         packages: &packages,
+        issues: vec![],
         missing_license: false,
         low_quality_license: false,
     };
@@ -82,15 +116,15 @@ pub fn run(roots: &[&Package], packages: &[&Package], variant: Bundle) -> anyhow
     if context.missing_license {
         log::error!(
             "
-  Our liches failed to recognise a license in one or more packages.
+  Our liches failed to recognize a license in one or more packages.
 
   We would be very grateful if you could check the corresponding package
   directories (see the package specific message above) to see if there is an
-  easily recognisable license file available.
+  easily recognizable license file available.
 
   If there is please submit details to
       https://github.com/Nemo157/cargo-lichking/issues
-  so we can make sure this license is recognised in the future.
+  so we can make sure this license is recognized in the future.
 
   If there isn't you could submit an issue to the package's project asking
   them to include the text of their license in the built packages.",
@@ -98,11 +132,17 @@ pub fn run(roots: &[&Package], packages: &[&Package], variant: Bundle) -> anyhow
     }
 
     if context.low_quality_license {
-        log::error!(
+        log::warn!(
             "\
              Our liches are very unsure about one or more licenses that were put into the \
              bundle. Please check the specific error messages above.",
         );
+    }
+
+    for issue in context.issues {
+        // TODO: impl tostring
+        // TODO: lower the log level
+        log::error!("{:?}", issue);
     }
 
     if context.missing_license || context.low_quality_license {
@@ -217,50 +257,29 @@ fn inline_package(
     out: &mut dyn io::Write,
 ) -> anyhow::Result<()> {
     let license = package.license();
-    if let Some(text) = find_generic_license_text(package, &license)? {
-        match text.confidence {
-            Confidence::Confident => (),
-            Confidence::SemiConfident => {
-                log::warn!(
-                    "{} has only a low-confidence candidate for license {}:",
-                    package.name,
-                    license
-                );
-                log::warn!("    {}", text.path.display());
-            }
-            Confidence::Unsure => {
-                log::error!(
-                    "{} has only a very low-confidence candidate for license {}:",
-                    package.name,
-                    license
-                );
-                log::error!("    {}", text.path.display());
-            }
+
+    match license {
+        License::Unspecified => {
+            log::error!("{} does not specify a license", package.name);
+            context.issues.push(LicenseIssues::Unspecified {
+                package_name: package.name.clone(),
+            });
         }
-        for line in text.text.lines() {
-            writeln!(out, "    {}", line)?;
-        }
-    } else {
-        match license {
-            License::Unspecified => {
-                log::error!("{} does not specify a license", package.name);
-            }
-            License::Multiple(licenses) => {
-                let mut first = true;
-                for license in licenses {
-                    if first {
-                        first = false;
-                    } else {
-                        writeln!(out)?;
-                        writeln!(out, "    ===============")?;
-                        writeln!(out)?;
-                    }
-                    inline_license(context, package, &license, out)?;
+        License::Multiple(licenses) => {
+            let mut first = true;
+            for license in licenses {
+                if first {
+                    first = false;
+                } else {
+                    writeln!(out)?;
+                    writeln!(out, "    ===============")?;
+                    writeln!(out)?;
                 }
-            }
-            license => {
                 inline_license(context, package, &license, out)?;
             }
+        }
+        license => {
+            inline_license(context, package, &license, out)?;
         }
     }
     writeln!(out)?;
@@ -272,101 +291,60 @@ fn source_package(
     package: &Package,
     out: &mut dyn io::Write,
 ) -> anyhow::Result<()> {
+    eprintln!("Source_package");
     let license = package.license();
-    if let Some(text) = find_generic_license_text(package, &license)? {
-        match text.confidence {
-            Confidence::Confident => (),
-            Confidence::SemiConfident => {
-                log::warn!(
-                    "{} has only a low-confidence candidate for license {}:",
-                    package.name,
-                    license
-                );
-                log::warn!("    {}", text.path.display());
-            }
-            Confidence::Unsure => {
-                log::error!(
-                    "{} has only a very low-confidence candidate for license {}:",
-                    package.name,
-                    license
-                );
-                log::error!("    {}", text.path.display());
-            }
+    let license_name = license.to_string();
+    match license {
+        License::Unspecified => {
+            log::error!("{} does not specify a license", package.name);
+            context.issues.push(LicenseIssues::Unspecified {
+                package_name: package.name.clone(),
+            });
         }
-        writeln!(
-            out,
-            "
-    LicensedCrate {{
-        name: {:?},
-        version: {:?},
-        licenses: Licenses {{
-            name: {:?},
-            licenses: &[
-                License {{
-                    name: {:?},
-                    text: Some({:?}),
-                }},
-            ],
-        }},
-    }},",
-            package.name,
-            package.version.to_string(),
-            license.to_string(),
-            license.to_string(),
-            text.text
-        )?;
-    } else {
-        let license_name = license.to_string();
-        match license {
-            License::Unspecified => {
-                log::error!("{} does not specify a license", package.name);
-            }
-            License::Multiple(licenses) => {
-                writeln!(
-                    out,
-                    "
+        License::Multiple(licenses) => {
+            writeln!(
+                out,
+                "
     LicensedCrate {{
         name: {:?},
         version: {:?},
         licenses: Licenses {{
             name: {:?},
             licenses: &[",
-                    package.name,
-                    package.version.to_string(),
-                    license_name
-                )?;
-                for license in licenses {
-                    let texts = find_license_text(package, &license)?;
-                    let text = (choose(context, package, &license, texts)?)
-                        .map(|t| format!("Some({:?})", t.text))
-                        .unwrap_or_else(|| "None".to_owned());
-                    writeln!(
-                        out,
-                        "
+                package.name,
+                package.version.to_string(),
+                license_name
+            )?;
+            for license in licenses {
+                let texts = better_find(package, &license)?;
+                let text = (choose(context, package, &license, texts)?)
+                    .map_or_else(|| "None".to_owned(), |t| format!("Some({:?})", t.text));
+                writeln!(
+                    out,
+                    "
                 License {{
                     name: {:?},
                     text: {},
                 }},",
-                        license.to_string(),
-                        text
-                    )?;
-                }
-                writeln!(
-                    out,
-                    "
+                    license.to_string(),
+                    text
+                )?;
+            }
+            writeln!(
+                out,
+                "
             ],
         }},
     }},"
-                )?;
-            }
-            license => {
-                let texts = find_license_text(package, &license)?;
-                let text = (choose(context, package, &license, texts)?)
-                    .map(|t| format!("Some({:?})", t.text))
-                    .unwrap_or_else(|| "None".to_owned());
-                writeln!(
-                    out,
-                    "
+            )?;
+        }
+        license => {
+            let texts = better_find(package, &license)?;
+            let text = (choose(context, package, &license, texts)?)
+                .map_or_else(|| "None".to_owned(), |t| format!("Some({:?})", t.text));
+            writeln!(
+                out,
+                "
     LicensedCrate {{
         name: {:?},
         version: {:?},
@@ -380,13 +358,12 @@ fn source_package(
             ],
         }},
     }},",
-                    package.name,
-                    package.version.to_string(),
-                    license.to_string(),
-                    license.to_string(),
-                    text
-                )?;
-            }
+                package.name,
+                package.version.to_string(),
+                license.to_string(),
+                license.to_string(),
+                text
+            )?;
         }
     }
     writeln!(out)?;
@@ -396,53 +373,33 @@ fn source_package(
 fn split_package(context: &mut Context, package: &Package, dir: &Path) -> anyhow::Result<()> {
     let license = package.license();
     let mut file = File::create(dir.join(package.name.as_str()))?;
-    if let Some(text) = find_generic_license_text(package, &license)? {
-        match text.confidence {
-            Confidence::Confident => (),
-            Confidence::SemiConfident => {
-                log::warn!(
-                    "{} has only a low-confidence candidate for license {}:",
-                    package.name,
-                    license
-                );
-                log::warn!("    {}", text.path.display());
-            }
-            Confidence::Unsure => {
-                log::error!(
-                    "{} has only a very low-confidence candidate for license {}:",
-                    package.name,
-                    license
-                );
-                log::error!("    {}", text.path.display());
-            }
+    match license {
+        License::Unspecified => {
+            log::error!("{} does not specify a license", package.name);
+            context.issues.push(LicenseIssues::Unspecified {
+                package_name: package.name.clone(),
+            });
         }
-        file.write_all(text.text.as_bytes())?;
-    } else {
-        match license {
-            License::Unspecified => {
-                log::error!("{} does not specify a license", package.name);
-            }
-            License::Multiple(licenses) => {
-                let mut first = true;
-                for license in licenses {
-                    if first {
-                        first = false;
-                    } else {
-                        writeln!(file)?;
-                        writeln!(file, "===============")?;
-                        writeln!(file)?;
-                    }
-                    let texts = find_license_text(package, &license)?;
-                    if let Some(text) = choose(context, package, &license, texts)? {
-                        file.write_all(text.text.as_bytes())?;
-                    }
+        License::Multiple(licenses) => {
+            let mut first = true;
+            for license in licenses {
+                if first {
+                    first = false;
+                } else {
+                    writeln!(file)?;
+                    writeln!(file, "===============")?;
+                    writeln!(file)?;
                 }
-            }
-            license => {
-                let texts = find_license_text(package, &license)?;
+                let texts = better_find(package, &license)?;
                 if let Some(text) = choose(context, package, &license, texts)? {
                     file.write_all(text.text.as_bytes())?;
                 }
+            }
+        }
+        license => {
+            let texts = better_find(package, &license)?;
+            if let Some(text) = choose(context, package, &license, texts)? {
+                file.write_all(text.text.as_bytes())?;
             }
         }
     }
@@ -455,7 +412,7 @@ fn inline_license(
     license: &License,
     out: &mut dyn io::Write,
 ) -> anyhow::Result<()> {
-    let texts = find_license_text(package, license)?;
+    let texts = better_find(package, license)?;
     if let Some(text) = choose(context, package, license, texts)? {
         for line in text.text.lines() {
             writeln!(out, "    {}", line)?;
@@ -464,6 +421,7 @@ fn inline_license(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn choose(
     context: &mut Context,
     package: &Package,
@@ -476,6 +434,9 @@ fn choose(
     let (mut semi_confident, mut unconfident): (Vec<LicenseText>, Vec<LicenseText>) = texts
         .into_iter()
         .partition(|text| text.confidence == Confidence::SemiConfident);
+    let (mut unsure, mut no_template): (Vec<LicenseText>, Vec<LicenseText>) = unconfident
+        .into_iter()
+        .partition(|text| text.confidence == Confidence::Unsure);
 
     Ok(Some({
         if confident.len() == 1 {
@@ -488,6 +449,11 @@ fn choose(
             );
             for text in &confident {
                 log::error!("    {}", text.path.display());
+                context.issues.push(LicenseIssues::MultiplePossible {
+                    package_name: package.name.clone(),
+                    license: license.to_string(),
+                    // TODO: add paths and confidence
+                });
             }
             confident.swap_remove(0)
         } else if semi_confident.len() == 1 {
@@ -497,8 +463,14 @@ fn choose(
                 license,
                 semi_confident[0].path.display(),
             );
+            context.issues.push(LicenseIssues::LowConfidence {
+                package_name: package.name.clone(),
+                license: license.to_string(),
+                confidence: semi_confident[0].confidence,
+            });
             semi_confident.swap_remove(0)
         } else if semi_confident.len() > 1 {
+            eprintln!("Setting low quality (semi-confident) for {:?}", license);
             context.low_quality_license = true;
             log::error!(
                 "{} has multiple low-confidence candidates for license {}:",
@@ -507,28 +479,74 @@ fn choose(
             );
             for text in &semi_confident {
                 log::error!("    {}", text.path.display());
+                context.issues.push(LicenseIssues::MultiplePossible {
+                    package_name: package.name.clone(),
+                    license: license.to_string(),
+                    // TODO: add paths and confidence
+                });
             }
             semi_confident.swap_remove(0)
-        } else if unconfident.len() == 1 {
+        } else if unsure.len() == 1 {
+            eprintln!("Setting low quality (unconfident) for {:?}", license);
             context.low_quality_license = true;
             log::warn!(
                 "{} has only a very low-confidence candidate for license {}:\n    {}",
                 package.name,
                 license,
-                unconfident[0].path.display(),
+                unsure[0].path.display(),
             );
-            unconfident.swap_remove(0)
-        } else if unconfident.len() > 1 {
+            context.issues.push(LicenseIssues::LowConfidence {
+                package_name: package.name.clone(),
+                license: license.to_string(),
+                confidence: unsure[0].confidence,
+            });
+            unsure.swap_remove(0)
+        } else if unsure.len() > 1 {
             context.low_quality_license = true;
             log::error!(
                 "{} has multiple very low-confidence candidates for license {}:",
                 package.name,
                 license
             );
-            for text in &unconfident {
+            for text in &unsure {
                 log::error!("    {}", text.path.display());
+                context.issues.push(LicenseIssues::MultiplePossible {
+                    package_name: package.name.clone(),
+                    license: license.to_string(),
+                    // TODO: add paths and confidence
+                });
             }
-            unconfident.swap_remove(0)
+            unsure.swap_remove(0)
+        } else if no_template.len() == 1 {
+            eprintln!("Setting no template (unconfident) for {:?}", license);
+            context.low_quality_license = true;
+            log::warn!(
+                "{} has only a no template low-confidence candidate for license {}:\n    {}",
+                package.name,
+                license,
+                no_template[0].path.display(),
+            );
+            context.issues.push(LicenseIssues::UnverifiableContent {
+                package_name: package.name.clone(),
+                license: license.to_string(),
+            });
+            no_template.swap_remove(0)
+        } else if no_template.len() > 1 {
+            context.low_quality_license = true;
+            log::error!(
+                "{} has multiple no template low-confidence candidates for license {}:",
+                package.name,
+                license
+            );
+            for text in &no_template {
+                log::error!("    {}", text.path.display());
+                context.issues.push(LicenseIssues::MultiplePossible {
+                    package_name: package.name.clone(),
+                    license: license.to_string(),
+                    // TODO: add paths and confidence
+                });
+            }
+            no_template.swap_remove(0)
         } else {
             log::error!(
                 "{} has no candidate texts for license {} in {}",
@@ -537,6 +555,10 @@ fn choose(
                 package.manifest_path.parent().unwrap().display()
             );
             context.missing_license = true;
+            context.issues.push(LicenseIssues::Missing {
+                package_name: package.name.clone(),
+                license: license.to_string(),
+            });
             return Ok(None);
         }
     }))
