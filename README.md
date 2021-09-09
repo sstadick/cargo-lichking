@@ -66,3 +66,4 @@ TODOs
 - add AND/WITH/OR vocab 
 - Write nicer report with better options for when to exit 1 (probably only exit 1 when undefined license, which should be impossible)
 - Add option to try to add template for missing files
+- Move all matching to regex?
