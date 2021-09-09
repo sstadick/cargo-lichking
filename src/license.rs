@@ -269,6 +269,8 @@ impl License {
             License::Apache_2_0 => vec![
                 slugify(self.to_string()).to_lowercase(),
                 String::from("apache"),
+                String::from("apache2"),
+                String::from("apache-2"),
             ],
             _ => vec![slugify(self.to_string()).to_lowercase()],
         };
