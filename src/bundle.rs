@@ -5,9 +5,7 @@ use std::path::Path;
 use anyhow::anyhow;
 use cargo_metadata::Package;
 
-use crate::discovery::{
-    better_find, find_generic_license_text, find_license_text, Confidence, LicenseText,
-};
+use crate::discovery::{better_find, Confidence, LicenseText};
 use crate::license::License;
 use crate::licensed::Licensed;
 use crate::options::Bundle;
@@ -15,28 +13,32 @@ use crate::options::Bundle;
 #[derive(Debug)]
 enum LicenseIssues {
     /// The LICENSE type files contents do not match the expected confidence
-    LowConfidence {
-        package_name: String,
-        license: String,
-        confidence: Confidence,
-    },
-    MultiplePossible {
+    MultiplePossibleLicenseFiles {
         package_name: String,
         license: String,
         // TODO: list them?
     },
     /// There is no LICENSE type file for the given license
-    Missing {
+    MissingLicenseFile {
+        package_name: String,
+        license: String,
+    },
+
+    SemiConfident {
+        package_name: String,
+        license: String,
+    },
+    Unsure {
+        package_name: String,
+        license: String,
+    },
+    /// There is nothing to compare the content of the LICENSE type file to
+    NoTemplate {
         package_name: String,
         license: String,
     },
     /// The package does not specify a LICENSE
-    Unspecified { package_name: String },
-    /// There is nothing to compare the content of the LICENSE type file to
-    UnverifiableContent {
-        package_name: String,
-        license: String,
-    },
+    UnspecifiedLicenseInPackage { package_name: String },
 }
 
 /// Hold state that will be used to determine the overall exit value of the program
@@ -261,9 +263,11 @@ fn inline_package(
     match license {
         License::Unspecified => {
             log::error!("{} does not specify a license", package.name);
-            context.issues.push(LicenseIssues::Unspecified {
-                package_name: package.name.clone(),
-            });
+            context
+                .issues
+                .push(LicenseIssues::UnspecifiedLicenseInPackage {
+                    package_name: package.name.clone(),
+                });
         }
         License::Multiple(licenses) => {
             let mut first = true;
@@ -297,9 +301,11 @@ fn source_package(
     match license {
         License::Unspecified => {
             log::error!("{} does not specify a license", package.name);
-            context.issues.push(LicenseIssues::Unspecified {
-                package_name: package.name.clone(),
-            });
+            context
+                .issues
+                .push(LicenseIssues::UnspecifiedLicenseInPackage {
+                    package_name: package.name.clone(),
+                });
         }
         License::Multiple(licenses) => {
             writeln!(
@@ -376,9 +382,11 @@ fn split_package(context: &mut Context, package: &Package, dir: &Path) -> anyhow
     match license {
         License::Unspecified => {
             log::error!("{} does not specify a license", package.name);
-            context.issues.push(LicenseIssues::Unspecified {
-                package_name: package.name.clone(),
-            });
+            context
+                .issues
+                .push(LicenseIssues::UnspecifiedLicenseInPackage {
+                    package_name: package.name.clone(),
+                });
         }
         License::Multiple(licenses) => {
             let mut first = true;
@@ -431,7 +439,7 @@ fn choose(
     let (mut confident, texts): (Vec<LicenseText>, Vec<LicenseText>) = texts
         .into_iter()
         .partition(|text| text.confidence == Confidence::Confident);
-    let (mut semi_confident, mut unconfident): (Vec<LicenseText>, Vec<LicenseText>) = texts
+    let (mut semi_confident, unconfident): (Vec<LicenseText>, Vec<LicenseText>) = texts
         .into_iter()
         .partition(|text| text.confidence == Confidence::SemiConfident);
     let (mut unsure, mut no_template): (Vec<LicenseText>, Vec<LicenseText>) = unconfident
@@ -449,11 +457,13 @@ fn choose(
             );
             for text in &confident {
                 log::error!("    {}", text.path.display());
-                context.issues.push(LicenseIssues::MultiplePossible {
-                    package_name: package.name.clone(),
-                    license: license.to_string(),
-                    // TODO: add paths and confidence
-                });
+                context
+                    .issues
+                    .push(LicenseIssues::MultiplePossibleLicenseFiles {
+                        package_name: package.name.clone(),
+                        license: license.to_string(),
+                        // TODO: add paths and confidence
+                    });
             }
             confident.swap_remove(0)
         } else if semi_confident.len() == 1 {
@@ -463,10 +473,9 @@ fn choose(
                 license,
                 semi_confident[0].path.display(),
             );
-            context.issues.push(LicenseIssues::LowConfidence {
+            context.issues.push(LicenseIssues::SemiConfident {
                 package_name: package.name.clone(),
                 license: license.to_string(),
-                confidence: semi_confident[0].confidence,
             });
             semi_confident.swap_remove(0)
         } else if semi_confident.len() > 1 {
@@ -479,11 +488,13 @@ fn choose(
             );
             for text in &semi_confident {
                 log::error!("    {}", text.path.display());
-                context.issues.push(LicenseIssues::MultiplePossible {
-                    package_name: package.name.clone(),
-                    license: license.to_string(),
-                    // TODO: add paths and confidence
-                });
+                context
+                    .issues
+                    .push(LicenseIssues::MultiplePossibleLicenseFiles {
+                        package_name: package.name.clone(),
+                        license: license.to_string(),
+                        // TODO: add paths and confidence
+                    });
             }
             semi_confident.swap_remove(0)
         } else if unsure.len() == 1 {
@@ -495,10 +506,9 @@ fn choose(
                 license,
                 unsure[0].path.display(),
             );
-            context.issues.push(LicenseIssues::LowConfidence {
+            context.issues.push(LicenseIssues::Unsure {
                 package_name: package.name.clone(),
                 license: license.to_string(),
-                confidence: unsure[0].confidence,
             });
             unsure.swap_remove(0)
         } else if unsure.len() > 1 {
@@ -510,11 +520,13 @@ fn choose(
             );
             for text in &unsure {
                 log::error!("    {}", text.path.display());
-                context.issues.push(LicenseIssues::MultiplePossible {
-                    package_name: package.name.clone(),
-                    license: license.to_string(),
-                    // TODO: add paths and confidence
-                });
+                context
+                    .issues
+                    .push(LicenseIssues::MultiplePossibleLicenseFiles {
+                        package_name: package.name.clone(),
+                        license: license.to_string(),
+                        // TODO: add paths and confidence
+                    });
             }
             unsure.swap_remove(0)
         } else if no_template.len() == 1 {
@@ -526,7 +538,7 @@ fn choose(
                 license,
                 no_template[0].path.display(),
             );
-            context.issues.push(LicenseIssues::UnverifiableContent {
+            context.issues.push(LicenseIssues::NoTemplate {
                 package_name: package.name.clone(),
                 license: license.to_string(),
             });
@@ -540,11 +552,13 @@ fn choose(
             );
             for text in &no_template {
                 log::error!("    {}", text.path.display());
-                context.issues.push(LicenseIssues::MultiplePossible {
-                    package_name: package.name.clone(),
-                    license: license.to_string(),
-                    // TODO: add paths and confidence
-                });
+                context
+                    .issues
+                    .push(LicenseIssues::MultiplePossibleLicenseFiles {
+                        package_name: package.name.clone(),
+                        license: license.to_string(),
+                        // TODO: add paths and confidence
+                    });
             }
             no_template.swap_remove(0)
         } else {
@@ -555,7 +569,7 @@ fn choose(
                 package.manifest_path.parent().unwrap().display()
             );
             context.missing_license = true;
-            context.issues.push(LicenseIssues::Missing {
+            context.issues.push(LicenseIssues::MissingLicenseFile {
                 package_name: package.name.clone(),
                 license: license.to_string(),
             });

@@ -57,3 +57,12 @@ additional terms or conditions.
 
 [Cargo]: https://github.com/rust-lang/cargo
 [License Slide]: http://www.dwheeler.com/essays/floss-license-slide.html
+
+
+TODOs
+- clean up output and logging
+- Include package location and version in enum, probably hold &Package and &License instead and impl custom formats
+- Figure out what confidense means
+- add AND/WITH/OR vocab 
+- Write nicer report with better options for when to exit 1 (probably only exit 1 when undefined license, which should be impossible)
+- Add option to try to add template for missing files

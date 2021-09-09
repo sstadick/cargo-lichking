@@ -1,3 +1,9 @@
+//! Contains all license related information
+//!
+//! See https://spdx.dev/wp-content/uploads/sites/41/2020/08/SPDX-specification-2-2.pdf for details on naming.
+//!
+//! For "exceptions" follow https://spdx.dev/wp-content/uploads/sites/41/2020/08/SPDX-specification-2-2.pdf#%5B%7B%22num%22%3A233%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C69%2C650%2C0%5D
+//! and treat a license "with" "exception" as a new license, i.e. Apache-2.0 WITH LLVM-exception is treated as its own license of now.
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -16,6 +22,7 @@ pub enum License {
     BSD_2_Clause,
     BSD_3_Clause,
     Apache_2_0,
+    Apache_2_0_WITH_LLVM_exception,
     LGPL_2_0,
     LGPL_2_1,
     LGPL_2_1Plus,
@@ -29,6 +36,7 @@ pub enum License {
     GPL_3_0Plus,
     AGPL_3_0,
     AGPL_3_0Plus,
+    Zlib,
 
     // Special cases
     Custom(String),
@@ -56,6 +64,7 @@ macro_rules! compatibility {
 }
 
 impl License {
+    // Not exhaustive
     pub fn can_include(&self, other: &License) -> Option<bool> {
         use self::License::*;
 
@@ -140,6 +149,7 @@ impl License {
             Custom(_)    => [MIT]
             File(_)      => [MIT]
             Multiple(_)  => [MIT]
+            _            => [MIT]
         });
 
         Some(false)
@@ -150,7 +160,16 @@ impl License {
             License::Unlicense => include_str!("licenses/Unlicense"),
             License::MIT => include_str!("licenses/MIT"),
             License::Apache_2_0 => include_str!("licenses/Apache-2.0"),
+            License::Apache_2_0_WITH_LLVM_exception => {
+                include_str!("licenses/Apache-2.0_WITH_LLVM-exception")
+            }
+            License::BSD_0_Clause => include_str!("licenses/0BSD"),
             License::BSD_3_Clause => include_str!("licenses/BSD-3-Clause"),
+            License::GPL_2_0Plus => include_str!("licenses/GPL-2.0-or-later"),
+            License::GPL_3_0Plus => include_str!("licenses/GPL-3.0-or-later"),
+            License::LGPL_2_1Plus => include_str!("licenses/LGPL-2.1-or-later"),
+            License::LGPL_3_0Plus => include_str!("licenses/LGPL-3.0-or-later"),
+            License::Zlib => include_str!("licenses/Zlib"),
             License::Multiple(_) => panic!("TODO: Refactor multiple handling"),
             _ => return None,
         })
@@ -170,6 +189,7 @@ impl FromStr for License {
             "BSD-2-Clause" => License::BSD_2_Clause,
             "BSD-3-Clause" => License::BSD_3_Clause,
             "Apache-2.0" => License::Apache_2_0,
+            "Apache-2.0 WITH LLVM-exception" => License::Apache_2_0_WITH_LLVM_exception,
             "LGPL-2.0-only" | "LGPL-2.0" => License::LGPL_2_0,
             "LGPL-2.1-only" | "LGPL-2.1" => License::LGPL_2_1,
             "LGPL-2.1-or-later" | "LGPL-2.1+" => License::LGPL_2_1Plus,
@@ -183,6 +203,8 @@ impl FromStr for License {
             "GPL-3.0-or-later" | "GPL-3.0+" => License::GPL_3_0Plus,
             "AGPL-3.0-only" | "AGPL-3.0" => License::AGPL_3_0,
             "AGPL-3.0-or-later" | "AGPL-3.0+" => License::AGPL_3_0Plus,
+            "Zlib" => License::Zlib,
+            // TODO: Sort out the SPDX "AND"
             s if s.contains('/') || s.contains(" OR ") => {
                 let mut licenses = s
                     .split('/')
@@ -209,6 +231,7 @@ impl fmt::Display for License {
             License::BSD_2_Clause => write!(w, "BSD-2-Clause"),
             License::BSD_3_Clause => write!(w, "BSD-3-Clause"),
             License::Apache_2_0 => write!(w, "Apache-2.0"),
+            License::Apache_2_0_WITH_LLVM_exception => write!(w, "Apache-2.0 WITH LLVM-exception"),
             License::LGPL_2_0 => write!(w, "LGPL-2.0-only"),
             License::LGPL_2_1 => write!(w, "LGPL-2.1-only"),
             License::LGPL_2_1Plus => write!(w, "LGPL-2.1-or-later"),
@@ -222,6 +245,7 @@ impl fmt::Display for License {
             License::GPL_3_0Plus => write!(w, "GPL-3.0-or-later"),
             License::AGPL_3_0 => write!(w, "AGPL-3.0-only"),
             License::AGPL_3_0Plus => write!(w, "AGPL-3.0-or-later"),
+            License::Zlib => write!(w, "Zlib"),
             License::Custom(ref s) => write!(w, "{}", s),
             License::File(ref f) => {
                 write!(w, "License specified in file ({})", f.to_string_lossy())
@@ -239,37 +263,16 @@ impl fmt::Display for License {
 }
 
 impl License {
-    /// slugified synonyms
+    /// slugified synonyms returned with the longest one first on the assumption that it is more specific
     pub fn synonyms(&self) -> Vec<String> {
-        match self {
+        let mut synonyms = match self {
             License::Apache_2_0 => vec![
                 slugify(self.to_string()).to_lowercase(),
                 String::from("apache"),
             ],
-            License::Unlicense
-            | License::BSD_0_Clause
-            | License::CC0_1_0
-            | License::MIT
-            | License::X11
-            | License::BSD_2_Clause
-            | License::BSD_3_Clause
-            | License::LGPL_2_0
-            | License::LGPL_2_1
-            | License::LGPL_2_1Plus
-            | License::LGPL_3_0
-            | License::LGPL_3_0Plus
-            | License::MPL_1_1
-            | License::MPL_2_0
-            | License::GPL_2_0
-            | License::GPL_2_0Plus
-            | License::GPL_3_0
-            | License::GPL_3_0Plus
-            | License::AGPL_3_0
-            | License::AGPL_3_0Plus
-            | License::Custom(_)
-            | License::File(_)
-            | License::Multiple(_)
-            | License::Unspecified => vec![slugify(self.to_string()).to_lowercase()],
-        }
+            _ => vec![slugify(self.to_string()).to_lowercase()],
+        };
+        synonyms.sort_by_key(|value| value.len() as i64 * -1);
+        synonyms
     }
 }

@@ -6,7 +6,7 @@ use cargo_metadata::Package;
 use regex::Regex;
 use slug::slugify;
 
-use crate::license::{self, License};
+use crate::license::License;
 
 const HIGH_CONFIDENCE_LIMIT: f32 = 0.10;
 const LOW_CONFIDENCE_LIMIT: f32 = 0.15;
@@ -95,6 +95,7 @@ pub fn better_find(package: &Package, license: &License) -> anyhow::Result<Vec<L
             || name.to_uppercase() == "LICENCE"
             || name.to_uppercase() == "LICENSE.MD"
             || name.to_uppercase() == "LICENSE.TXT"
+            || name.to_uppercase() == "COPYING"
     }
 
     fn name_matches(name: &str, license: &License) -> bool {
@@ -102,12 +103,25 @@ pub fn better_find(package: &Package, license: &License) -> anyhow::Result<Vec<L
         match *license {
             License::Custom(ref custom) => {
                 let custom = slugify(custom).to_lowercase();
-                name == custom || (name.contains("license") && name.contains(&custom))
+                name == custom
+                    || name == format!("license-{}", custom)
+                    || name == format!("license-{}-md", custom)
+                    || name == format!("license-{}-txt", custom)
+                    || name == format!("{}-license", custom)
+                    || name == format!("{}-license-md", custom)
+                    || name == format!("{}-license-txt", custom)
             }
             ref license => {
                 let mut found = false;
                 for lic in license.synonyms() {
-                    if name == lic || (name.contains("license") && name.contains(&lic)) {
+                    if name == lic
+                        || name == format!("license-{}", lic)
+                        || name == format!("license-{}-md", lic)
+                        || name == format!("license-{}-txt", lic)
+                        || name == format!("{}-license", lic)
+                        || name == format!("{}-license-md", lic)
+                        || name == format!("{}-license-txt", lic)
+                    {
                         found = true;
                         break;
                     }
@@ -147,74 +161,6 @@ pub fn better_find(package: &Package, license: &License) -> anyhow::Result<Vec<L
 
     if texts.is_empty() && generic.is_some() {
         texts.push(generic.unwrap());
-    }
-
-    Ok(texts)
-}
-
-pub fn find_generic_license_text(
-    package: &Package,
-    license: &License,
-) -> anyhow::Result<Option<LicenseText>> {
-    fn generic_license_name(name: &str) -> bool {
-        name.to_uppercase() == "LICENSE"
-            || name.to_uppercase() == "LICENCE"
-            || name.to_uppercase() == "LICENSE.MD"
-            || name.to_uppercase() == "LICENSE.TXT"
-    }
-
-    for entry in fs::read_dir(package.manifest_path.parent().unwrap())? {
-        let entry = entry?;
-        let path = entry.path().to_owned();
-        let name = entry.file_name().to_string_lossy().into_owned();
-
-        if generic_license_name(&name) {
-            if let Ok(text) = fs::read_to_string(&path) {
-                let confidence = check_against_template(&text, license);
-                return Ok(Some(LicenseText {
-                    path,
-                    text,
-                    confidence,
-                }));
-            }
-        }
-    }
-
-    Ok(None)
-}
-
-pub fn find_license_text(package: &Package, license: &License) -> anyhow::Result<Vec<LicenseText>> {
-    fn name_matches(name: &str, license: &License) -> bool {
-        let name = name.to_uppercase();
-        match *license {
-            License::Apache_2_0 => name == "LICENSE-APACHE",
-            License::Custom(ref custom) => {
-                let custom = custom.to_uppercase();
-                name == custom || name == format!("LICENSE-{}", custom)
-            }
-            ref license => {
-                let license = license.to_string().to_uppercase();
-                name == license || name == format!("LICENSE-{}", license)
-            }
-        }
-    }
-
-    let mut texts = Vec::new();
-    for entry in fs::read_dir(package.manifest_path.parent().unwrap())? {
-        let entry = entry?;
-        let path = entry.path().to_owned();
-        let name = entry.file_name().to_string_lossy().into_owned();
-
-        if name_matches(&name, license) {
-            if let Ok(text) = fs::read_to_string(&path) {
-                let confidence = check_against_template(&text, license);
-                texts.push(LicenseText {
-                    path,
-                    text,
-                    confidence,
-                });
-            }
-        }
     }
 
     Ok(texts)
