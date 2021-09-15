@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 use slug::slugify;
 
-#[derive(Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
+#[derive(Eq, PartialEq, Hash, Ord, PartialOrd, Debug, Clone)]
 #[allow(non_camel_case_types)]
 pub enum License {
     // Licenses specified in the [SPDX License List](https://spdx.org/licenses/)
